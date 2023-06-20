@@ -13,7 +13,7 @@ fn main() {
     .add_plugins(DefaultPlugins.set(WindowPlugin {
         primary_window: Some(Window {
             title: "It's a game!".into(),
-            resolution: (1920., 1080.).into(),
+            // resolution: (1920., 1080.).into(),
             resizable: false,
             present_mode: PresentMode::AutoVsync,
             mode: WindowMode::Fullscreen,
@@ -31,6 +31,7 @@ fn main() {
     .add_plugin(RapierDebugRenderPlugin::default())
     .add_plugin(InputManagerPlugin::<PlayerActions>::default()) // player actions for buttons 
     .add_system(setup_graphics)
+
     .run();
 }
 
@@ -44,9 +45,20 @@ enum PlayerActions {
 struct Name(String);
 
 #[derive(Clone, Default, Debug, Component)]
-struct Player;
+struct Player{
+    rotation: i8,
+    curent_state: String
+}
 
 fn setup_graphics(mut commands: Commands) {
     // Add a camera so we can see the debug-render.
     commands.spawn(Camera2dBundle::default());
+}
+
+fn setup_map(mut commands: Commands) {
+
+}
+
+fn setup_player(mut commands: Commands) {
+
 }

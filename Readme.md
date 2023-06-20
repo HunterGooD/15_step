@@ -28,4 +28,7 @@ There will be several types of enemies. They will have their own zest, indicatin
 
 Items will play an important role in the gameplay, as this is almost the only thing that can make the player stronger. There will also be 2 active items that you will need to pick up wisely.
 
+## 2 Choose language and platform
 
+The programming language Rust was chosen as the development language. Among the libraries for games, one of the most popular libraries with a good community was chosen - Bevy. For the physics of the game, the bevy_rapier2d library was chosen. For user input, the leafwing-input-manager library was chosen as the most convenient way to accept user input. </br> 
+In the future, the list of libraries can be expanded
