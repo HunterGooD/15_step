@@ -1,5 +1,6 @@
 # 15 step 
-This repo for game in 15 steps. 15 beginner steps in gamedev
+This repo for game in 15 steps. 15 beginner steps in gamedev </br>
+The steps do not claim to be correct when developing games. They exist for enthusiasts who just wanted to create their own game.
 
 ## 1 Decide to write a game
 The idea of a word game. The idea of a game in a couple of words.
@@ -32,3 +33,7 @@ Items will play an important role in the gameplay, as this is almost the only th
 
 The programming language Rust was chosen as the development language. Among the libraries for games, one of the most popular libraries with a good community was chosen - Bevy. For the physics of the game, the bevy_rapier2d library was chosen. For user input, the leafwing-input-manager library was chosen as the most convenient way to accept user input. </br> 
 In the future, the list of libraries can be expanded
+
+## 3 Opportunity check
+
+This step is practical. It needs to define user input and output, while doing everything without configuration files. Make debug information for further debugging. Implement character movement, add a couple of platforms.
