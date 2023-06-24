@@ -37,10 +37,6 @@ fn main() {
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(InputManagerPlugin::<PlayerActions>::default()) // player actions for buttons
         .add_startup_systems((setup_graphics, setup_map, setup_player))
-        // .insert_resource(JumpInfo {
-        //     count: 1,
-        //     time_up: Timer::new(Duration::from_millis(500), TimerMode::Once),
-        // })
         .add_system(move_player)
         .add_system(log_states)
         .run();
@@ -50,6 +46,7 @@ fn main() {
 enum PlayerActions {
     Move,
     Jump,
+    Dash,
 }
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Default)]
 enum PlayerStates {
@@ -80,7 +77,34 @@ struct JumpInfo {
 
 impl Default for JumpInfo {
     fn default() -> Self {
-        Self { count: 0, time_up: Timer::new(Duration::from_millis(500), TimerMode::Once) }
+        Self { 
+            count: 0, 
+            time_up: Timer::new(Duration::from_millis(500), TimerMode::Once) 
+        }
+    }
+}
+
+const DASH_FRAMES: u8 = 7;
+const DASH_SPEED_FACTOR: f32 = 0.1;
+
+#[derive(Resource, Debug)]
+struct DashInfo {
+    cooldown_time: Timer,
+    evade_time: Timer,
+    is_used: bool,
+    frames_count: u8,
+}
+
+impl Default for DashInfo {
+    fn default() -> Self {
+        let mut cooldown_timer = Timer::new(Duration::from_millis(350), TimerMode::Once);
+        cooldown_timer.tick(Duration::from_secs(1)); // finished on init
+        Self { 
+            cooldown_time: cooldown_timer,
+            evade_time: Timer::new(Duration::from_millis(50), TimerMode::Once),
+            is_used: false,
+            frames_count: 0 
+        }
     }
 }
 
@@ -135,6 +159,8 @@ fn setup_player(mut commands: Commands) {
                 .insert(VirtualDPad::arrow_keys(), PlayerActions::Move)
                 .insert(KeyCode::Space, PlayerActions::Jump)
                 .insert(GamepadButtonType::South, PlayerActions::Jump)
+                .insert(KeyCode::LShift, PlayerActions::Dash)
+                .insert(GamepadButtonType::East, PlayerActions::Dash)
                 .set_gamepad(Gamepad { id: 0 })
                 .build(),
         },
@@ -157,6 +183,7 @@ fn move_player(
     time: Res<Time>,
     rapier_config: Res<RapierConfiguration>,
     mut jump_info: Local<JumpInfo>,
+    mut dash_info: Local<DashInfo>,
     mut controller_query: Query<
         (
             &ActionState<PlayerActions>,
@@ -200,25 +227,42 @@ fn move_player(
         .clamped_axis_pair(PlayerActions::Move)
         .unwrap()
         .x();
+    if axis_vector != 0. {
+        player.rotation = if (axis_vector * 9.) < 0. { -1 } else { 1 };
+    }
 
     let mut y = 0.;
     for action in action_state.get_just_pressed() {
         match action {
             PlayerActions::Jump => {
-                if jump_info.count >= 2 {
+                if jump_info.count >= MAX_JUMP {
                     return;
                 }
                 // instant_acceleration.y = 1.;
                 instant_velocity.y = 1.;
                 y = jump_impulse;
                 jump_info.time_up.reset();
-                // jump_info.time_up.tick(time.delta());
 
                 jump_info.count += 1;
                 player.current_state = PlayerStates::Jump;
+
+                dash_info.is_used = false;
             }
+            PlayerActions::Dash => {
+                if dash_info.cooldown_time.finished() {
+                    dash_info.evade_time.reset();
+                    dash_info.frames_count = 0;
+                    dash_info.is_used = true;
+                }
+            },
             _ => (),
         }
+    }
+
+    info!("{:?}", dash_info);
+
+    if  !dash_info.cooldown_time.finished() {
+        dash_info.cooldown_time.tick(time.delta());
     }
 
     if player.current_state == PlayerStates::Jump {
@@ -240,8 +284,19 @@ fn move_player(
         }
     }
 
+    if dash_info.is_used {
+        dash_info.evade_time.tick(time.delta());
+        instant_velocity.x *= DASH_SPEED_FACTOR;
+        dash_info.frames_count += 1;
+        if dash_info.frames_count == DASH_FRAMES {
+            dash_info.is_used = false;
+            dash_info.cooldown_time.reset();
+        }
+        controller.translation = Some(Vec2::new(player.rotation as f32 * 35., 0.));
+    }
+
     instant_velocity += Vec2::new(axis_vector * speed, y);
     instant_velocity = instant_velocity.clamp(Vec2::splat(-1000.0), Vec2::splat(1000.0));
     player.velocity = (instant_acceleration * dt) + instant_velocity;
-    controller.translation = Some(player.velocity * dt);
+    controller.translation = Some(controller.translation.unwrap_or(Vec2::new(0., 0.)) + player.velocity * dt);
 }
