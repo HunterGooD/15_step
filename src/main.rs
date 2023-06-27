@@ -5,6 +5,7 @@ use bevy::{
     prelude::*,
     window::{PresentMode, WindowMode},
 };
+use bevy_ecs_tilemap::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_rapier2d::prelude::*;
 use leafwing_input_manager::prelude::*;
@@ -29,6 +30,7 @@ fn main() {
         .add_plugin(bevy::diagnostic::EntityCountDiagnosticsPlugin::default())
         .add_plugin(FrameTimeDiagnosticsPlugin)
         .add_plugin(WorldInspectorPlugin::default())
+        .add_plugin(TilemapPlugin)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0)) // create world rapier physics
         .insert_resource(RapierConfiguration {
             gravity: Vec2::new(0.0, -2000.0),
@@ -36,7 +38,10 @@ fn main() {
         })
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(InputManagerPlugin::<PlayerActions>::default()) // player actions for buttons
-        .add_startup_systems((setup_graphics, setup_map, setup_player))
+        .add_plugin(InputManagerPlugin::<CameraActions>::default()) // player actions for buttons
+        .add_startup_systems((setup_graphics, setup_map, setup_player).chain())
+        .add_system(camera_settings)
+        .add_system(pan_camera)
         .add_system(move_player)
         .add_system(log_states)
         .run();
@@ -48,6 +53,15 @@ enum PlayerActions {
     Jump,
     Dash,
 }
+
+// for debug
+#[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug)]
+enum CameraActions {
+    Zoom,
+    PanLeft,
+    PanRight,
+}
+
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Default)]
 enum PlayerStates {
     #[default]
@@ -122,10 +136,77 @@ struct PlayerBundle {
 
 fn setup_graphics(mut commands: Commands) {
     // Add a camera so we can see the debug-render.
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2dBundle::default())
+        .insert(InputManagerBundle::<CameraActions>{
+            input_map: InputMap::default()
+                .insert(SingleAxis::mouse_wheel_y(), CameraActions::Zoom)
+                .insert(MouseWheelDirection::Left, CameraActions::PanLeft)
+                .insert(MouseWheelDirection::Right, CameraActions::PanRight)
+                .build(),
+            ..default()
+        });
 }
 
-fn setup_map(mut commands: Commands) {
+
+fn camera_settings(mut q: Query<(&mut OrthographicProjection, &ActionState<CameraActions>), With<Camera2d>>,) {
+    const CAMERA_ZOOM_RATE: f32 = 0.05;
+
+    let (mut projection, action_state)  = q.single_mut();
+    let zoom_delta = action_state.value(CameraActions::Zoom);
+
+    projection.scale *= 1. - zoom_delta * CAMERA_ZOOM_RATE;
+}
+
+fn pan_camera(mut query: Query<(&mut Transform, &ActionState<CameraActions>), With<Camera2d>>) {
+    const CAMERA_PAN_RATE: f32 = 10.;
+
+    let (mut camera_transform, action_state) = query.single_mut();
+
+    // When using the `MouseWheelDirection` type, mouse wheel inputs can be treated like simple buttons
+    if action_state.pressed(CameraActions::PanLeft) {
+        camera_transform.translation.x -= CAMERA_PAN_RATE;
+    }
+
+    if action_state.pressed(CameraActions::PanRight) {
+        camera_transform.translation.x += CAMERA_PAN_RATE;
+    }
+}
+
+fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
+
+    let texture_handle: Handle<Image> = asset_server.load("tiles/forest/tileset.png"); // 31 x 22 tiles
+    let map_size = TilemapSize { x: 500, y: 1 };
+
+    
+    let mut tile_storage = TileStorage::empty(map_size);
+    let tilemap_entity = commands.spawn_empty().id();
+
+    fill_tilemap(
+        TileTextureIndex(1),
+        map_size,
+        TilemapId(tilemap_entity),
+        &mut commands,
+        &mut tile_storage,
+    );
+
+    let tile_size = TilemapTileSize { x: 16.0, y: 16.0 };
+    let grid_size = tile_size.into();
+    let map_type = TilemapType::default();
+
+    commands.entity(tilemap_entity).insert(TilemapBundle {
+        grid_size,
+        map_type,
+        size: map_size,
+        storage: tile_storage,
+        texture: TilemapTexture::Single(texture_handle.clone()),
+        tile_size,
+        transform: Transform::from_xyz(
+            -4976., -374., 1.,
+        ).with_scale(Vec3::splat(3.)),
+        ..Default::default()
+    });
+
+
     commands
         .spawn(Collider::cuboid(5000., 50.))
         .insert(RigidBody::Fixed)
@@ -148,7 +229,7 @@ fn setup_player(mut commands: Commands) {
                 custom_size: Some(Vec2::new(60., 140.)),
                 ..Default::default()
             },
-            transform: Transform::from_xyz(0., 400., 0.),
+            transform: Transform::from_xyz(0., 400., 10.),
             ..Default::default()
         },
         input: InputManagerBundle::<PlayerActions> {
@@ -176,7 +257,7 @@ fn setup_player(mut commands: Commands) {
 
 fn log_states(q: Query<&Player, With<Player>>) {
     let player = q.single();
-    info!("{:?}", player.current_state);
+    // info!("{:?}", player.current_state);
 }
 
 fn move_player(
@@ -259,7 +340,7 @@ fn move_player(
         }
     }
 
-    info!("{:?}", dash_info);
+    // info!("{:?}", dash_info);
 
     if  !dash_info.cooldown_time.finished() {
         dash_info.cooldown_time.tick(time.delta());

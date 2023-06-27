@@ -37,3 +37,7 @@ In the future, the list of libraries can be expanded
 ## 3 Opportunity check
 
 This step is practical. It needs to define user input and output, while doing everything without configuration files. Make debug information for further debugging. Implement character movement, add a couple of platforms.
+
+## 4 Map
+
+You need to select map tiles, collisions, backgrounds and other decorations, you can also interact with some elements of the map such as doors and so on. At this stage, map generation is not needed yet, everything can be hardcoded.

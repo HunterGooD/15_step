@@ -2,6 +2,7 @@
 name = "first_game"
 version = "0.1.0"
 edition = "2021"
+keywords = ["gamedev", "bevy", "roguelike", "beginner", "pixelart"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -16,4 +17,5 @@ bevy="0.10.1"
 bevy_rapier2d="0.21.0"
 leafwing-input-manager = "^0.9.0"
 bevy-inspector-egui = "^0.18.0"
-
+bevy-parallax = "0.5.0"
+bevy_ecs_tilemap = "0.10.0"
