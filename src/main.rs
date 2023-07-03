@@ -45,18 +45,38 @@ fn main() {
                     tile_size: Vec2::new(320.0, 180.0),
                     cols: 1,
                     rows: 1,
-                    scale: 17.5,
+                    scale: 30.5,
                     z: 0.0,
                     ..Default::default()
                 },
                 LayerData {
-                    speed: LayerSpeed::Horizontal(0.6),
+                    speed: LayerSpeed::Horizontal(0.7),
                     path: "tiles/forest/background/layer_2.png".to_string(),
                     tile_size: Vec2::new(320.0, 180.0),
                     cols: 1,
                     rows: 1,
-                    scale: 9.5,
+                    scale: 25.5,
                     z: 1.0,
+                    ..Default::default()
+                },
+                LayerData {
+                    speed: LayerSpeed::Horizontal(0.5),
+                    path: "tiles/forest/background/layer_3.png".to_string(),
+                    tile_size: Vec2::new(320.0, 180.0),
+                    cols: 1,
+                    rows: 1,
+                    scale: 25.5,
+                    z: 2.0,
+                    ..Default::default()
+                },
+                LayerData {
+                    speed: LayerSpeed::Horizontal(0.3),
+                    path: "tiles/forest/background/layer_2.png".to_string(),
+                    tile_size: Vec2::new(320.0, 180.0),
+                    cols: 1,
+                    rows: 1,
+                    scale: 20.5,
+                    z: 3.0,
                     ..Default::default()
                 },
                 LayerData {
@@ -65,8 +85,8 @@ fn main() {
                     tile_size: Vec2::new(320.0, 180.0),
                     cols: 1,
                     rows: 1,
-                    scale: 8.5,
-                    z: 2.0,
+                    scale: 15.5,
+                    z: 4.0,
                     ..Default::default()
                 },
             ],
@@ -84,7 +104,6 @@ fn main() {
         .add_system(camera_settings)
         .add_system(pan_camera)
         .add_system(move_player)
-        .add_system(log_states)
         .add_system(parallax_move)
         .run();
 }
@@ -178,17 +197,17 @@ struct PlayerBundle {
 
 fn setup_graphics(mut commands: Commands) {
     // Add a camera so we can see the debug-render.
-    commands
-        .spawn(Camera2dBundle::default())
-        .insert(InputManagerBundle::<CameraActions> {
-            input_map: InputMap::default()
-                .insert(SingleAxis::mouse_wheel_y(), CameraActions::Zoom)
-                .insert(MouseWheelDirection::Left, CameraActions::PanLeft)
-                .insert(MouseWheelDirection::Right, CameraActions::PanRight)
-                .build(),
-            ..default()
-        })
-        .insert(ParallaxCameraComponent);
+    // commands
+    //     .spawn(Camera2dBundle::default())
+    //     .insert(InputManagerBundle::<CameraActions> {
+    //         input_map: InputMap::default()
+    //             .insert(SingleAxis::mouse_wheel_y(), CameraActions::Zoom)
+    //             .insert(MouseWheelDirection::Left, CameraActions::PanLeft)
+    //             .insert(MouseWheelDirection::Right, CameraActions::PanRight)
+    //             .build(),
+    //         ..default()
+    //     })
+    //     .insert(ParallaxCameraComponent);
 }
 
 fn parallax_move(
@@ -200,18 +219,19 @@ fn parallax_move(
     let transform_cam = camera_q.single();
     info!("Player {:?}", transform);
     info!("Camera {:?}", transform_cam);
+    
     let axis_vector = action_state
         .clamped_axis_pair(PlayerActions::Move)
         .unwrap()
         .x();
 
-    let mut speed_camera = 9.5;
+    let mut speed_camera = 10.;
     //TODO: valocity for camera
-    if (transform_cam.translation.x.abs() - transform.translation.x.abs()).abs() < 150.0 {
-        speed_camera = 12.5;
-    } else if (transform_cam.translation.x.abs() - transform.translation.x.abs()).abs() > 150.0 {
-        speed_camera = 4.5;
-    }
+    // if (transform_cam.translation.x.abs() - transform.translation.x.abs()).abs() < 150.0 {
+    //     speed_camera = 10.5;
+    // } else if (transform_cam.translation.x.abs() - transform.translation.x.abs()).abs() > 150.0 {
+    //     speed_camera = 6.5;
+    // }
 
     if axis_vector > 0.01 {
         move_event_writer.send(ParallaxMoveEvent {
@@ -223,15 +243,15 @@ fn parallax_move(
         });
     }
 
-    match player.current_state {
-        PlayerStates::Jump => move_event_writer.send(ParallaxMoveEvent {
-            camera_move_speed: Vec2::new(0.0, 3.0),
-        }),
-        PlayerStates::Fall => move_event_writer.send(ParallaxMoveEvent {
-            camera_move_speed: Vec2::new(0.0, -3.0),
-        }),
-        _ => (),
-    }
+    // match player.current_state {
+    //     PlayerStates::Jump => move_event_writer.send(ParallaxMoveEvent {
+    //         camera_move_speed: Vec2::new(0.0, 3.0),
+    //     }),
+    //     PlayerStates::Fall => move_event_writer.send(ParallaxMoveEvent {
+    //         camera_move_speed: Vec2::new(0.0, -3.0),
+    //     }),
+    //     _ => (),
+    // }
 }
 
 fn camera_settings(
@@ -335,13 +355,18 @@ fn setup_player(mut commands: Commands) {
         },
         controller_output: KinematicCharacterControllerOutput::default(),
         collider: Collider::cuboid(30., 70.),
-    });
+    }).insert(Camera2dBundle::default())
+    .insert(InputManagerBundle::<CameraActions> {
+        input_map: InputMap::default()
+            .insert(SingleAxis::mouse_wheel_y(), CameraActions::Zoom)
+            .insert(MouseWheelDirection::Left, CameraActions::PanLeft)
+            .insert(MouseWheelDirection::Right, CameraActions::PanRight)
+            .build(),
+        ..default()
+    })
+    .insert(ParallaxCameraComponent);
 }
 
-fn log_states(q: Query<&Player, With<Player>>) {
-    let player = q.single();
-    // info!("{:?}", player.current_state);
-}
 
 fn move_player(
     time: Res<Time>,
