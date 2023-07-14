@@ -12,86 +12,90 @@ use bevy_parallax::{
 };
 
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use bevy_rapier2d::{prelude::*, na::ComplexField};
+use bevy_rapier2d::{na::ComplexField, prelude::*};
 use leafwing_input_manager::prelude::*;
 use leafwing_input_manager::InputManagerBundle;
 
 fn main() {
     // create App main struct for run game in bevy
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "It's a game!".into(),
-                resolution: (1920., 1080.).into(),
-                resizable: false,
-                present_mode: PresentMode::AutoVsync,
-                // mode: WindowMode::Fullscreen,
-                ..default()
-            }),
-            ..default()
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(ImagePlugin::default_nearest())
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: "It's a game!".into(),
+                        resolution: (1920., 1080.).into(),
+                        resizable: false,
+                        present_mode: PresentMode::AutoVsync,
+                        // mode: WindowMode::Fullscreen,
+                        ..default()
+                    }),
+                    ..default()
+                }),
+        )
         .add_plugin(LogDiagnosticsPlugin::default())
         .add_plugin(bevy::diagnostic::SystemInformationDiagnosticsPlugin::default())
         .add_plugin(bevy::diagnostic::EntityCountDiagnosticsPlugin::default())
         .add_plugin(FrameTimeDiagnosticsPlugin)
         .add_plugin(WorldInspectorPlugin::default())
         .add_plugin(TilemapPlugin)
-        .add_plugin(ParallaxPlugin)
-        .insert_resource(ParallaxResource {
-            layer_data: vec![
-                LayerData {
-                    speed: LayerSpeed::Horizontal(0.9),
-                    path: "tiles/forest/background/layer_1.png".to_string(),
-                    tile_size: Vec2::new(320.0, 180.0),
-                    cols: 1,
-                    rows: 1,
-                    scale: 30.5,
-                    z: 0.0,
-                    ..Default::default()
-                },
-                LayerData {
-                    speed: LayerSpeed::Horizontal(0.7),
-                    path: "tiles/forest/background/layer_2.png".to_string(),
-                    tile_size: Vec2::new(320.0, 180.0),
-                    cols: 1,
-                    rows: 1,
-                    scale: 25.5,
-                    z: 1.0,
-                    ..Default::default()
-                },
-                LayerData {
-                    speed: LayerSpeed::Horizontal(0.5),
-                    path: "tiles/forest/background/layer_3.png".to_string(),
-                    tile_size: Vec2::new(320.0, 180.0),
-                    cols: 1,
-                    rows: 1,
-                    scale: 25.5,
-                    z: 2.0,
-                    ..Default::default()
-                },
-                LayerData {
-                    speed: LayerSpeed::Horizontal(0.3),
-                    path: "tiles/forest/background/layer_2.png".to_string(),
-                    tile_size: Vec2::new(320.0, 180.0),
-                    cols: 1,
-                    rows: 1,
-                    scale: 20.5,
-                    z: 3.0,
-                    ..Default::default()
-                },
-                LayerData {
-                    speed: LayerSpeed::Horizontal(0.1),
-                    path: "tiles/forest/background/layer_3.png".to_string(),
-                    tile_size: Vec2::new(320.0, 180.0),
-                    cols: 1,
-                    rows: 1,
-                    scale: 15.5,
-                    z: 4.0,
-                    ..Default::default()
-                },
-            ],
-            ..Default::default()
-        })
+        // .add_plugin(ParallaxPlugin)
+        // .insert_resource(ParallaxResource {
+        //     layer_data: vec![
+        //         LayerData {
+        //             speed: LayerSpeed::Horizontal(0.9),
+        //             path: "tiles/forest/background/layer_1.png".to_string(),
+        //             tile_size: Vec2::new(320.0, 180.0),
+        //             cols: 1,
+        //             rows: 1,
+        //             scale: 30.5,
+        //             z: 0.0,
+        //             ..Default::default()
+        //         },
+        //         LayerData {
+        //             speed: LayerSpeed::Horizontal(0.7),
+        //             path: "tiles/forest/background/layer_2.png".to_string(),
+        //             tile_size: Vec2::new(320.0, 180.0),
+        //             cols: 1,
+        //             rows: 1,
+        //             scale: 25.5,
+        //             z: 1.0,
+        //             ..Default::default()
+        //         },
+        //         LayerData {
+        //             speed: LayerSpeed::Horizontal(0.5),
+        //             path: "tiles/forest/background/layer_3.png".to_string(),
+        //             tile_size: Vec2::new(320.0, 180.0),
+        //             cols: 1,
+        //             rows: 1,
+        //             scale: 25.5,
+        //             z: 2.0,
+        //             ..Default::default()
+        //         },
+        //         LayerData {
+        //             speed: LayerSpeed::Horizontal(0.3),
+        //             path: "tiles/forest/background/layer_2.png".to_string(),
+        //             tile_size: Vec2::new(320.0, 180.0),
+        //             cols: 1,
+        //             rows: 1,
+        //             scale: 20.5,
+        //             z: 3.0,
+        //             ..Default::default()
+        //         },
+        //         LayerData {
+        //             speed: LayerSpeed::Horizontal(0.1),
+        //             path: "tiles/forest/background/layer_3.png".to_string(),
+        //             tile_size: Vec2::new(320.0, 180.0),
+        //             cols: 1,
+        //             rows: 1,
+        //             scale: 15.5,
+        //             z: 4.0,
+        //             ..Default::default()
+        //         },
+        //     ],
+        //     ..Default::default()
+        // })
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0)) // create world rapier physics
         .insert_resource(RapierConfiguration {
             gravity: Vec2::new(0.0, -2000.0),
@@ -102,10 +106,26 @@ fn main() {
         .add_plugin(InputManagerPlugin::<CameraActions>::default())
         .add_startup_systems((setup_graphics, setup_map, setup_player).chain())
         .add_system(camera_settings)
-        .add_system(pan_camera)
         .add_system(move_player)
-        .add_system(parallax_move)
+        .add_system(follow)
         .run();
+}
+
+fn follow(
+    time: Res<Time>,
+    mut camera_query: Query<&mut Transform, (With<Camera2d>, Without<Player>)>,
+    player_query: Query<&Transform, With<Player>>,
+) {
+    for mut cam_t in &mut camera_query {
+        if let Ok(player_t) = player_query.get_single() {
+            let velocity = Vec2::new(cam_t.translation.x, cam_t.translation.y).lerp(
+                Vec2::new(player_t.translation.x, player_t.translation.y+150.),
+                20. * time.delta_seconds(),
+            );
+
+            cam_t.translation = velocity.extend(cam_t.translation.z);
+        }
+    }
 }
 
 #[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug)]
@@ -197,61 +217,17 @@ struct PlayerBundle {
 
 fn setup_graphics(mut commands: Commands) {
     // Add a camera so we can see the debug-render.
-    // commands
-    //     .spawn(Camera2dBundle::default())
-    //     .insert(InputManagerBundle::<CameraActions> {
-    //         input_map: InputMap::default()
-    //             .insert(SingleAxis::mouse_wheel_y(), CameraActions::Zoom)
-    //             .insert(MouseWheelDirection::Left, CameraActions::PanLeft)
-    //             .insert(MouseWheelDirection::Right, CameraActions::PanRight)
-    //             .build(),
-    //         ..default()
-    //     })
+    commands
+        .spawn(Camera2dBundle::default())
+        .insert(InputManagerBundle::<CameraActions> {
+            input_map: InputMap::default()
+                .insert(SingleAxis::mouse_wheel_y(), CameraActions::Zoom)
+                .insert(MouseWheelDirection::Left, CameraActions::PanLeft)
+                .insert(MouseWheelDirection::Right, CameraActions::PanRight)
+                .build(),
+            ..default()
+        });
     //     .insert(ParallaxCameraComponent);
-}
-
-fn parallax_move(
-    action_q: Query<(&ActionState<PlayerActions>, &Player, &Transform), With<Player>>,
-    camera_q: Query<&Transform, With<Camera2d>>,
-    mut move_event_writer: EventWriter<ParallaxMoveEvent>,
-) {
-    let (action_state, player, transform) = action_q.single();
-    let transform_cam = camera_q.single();
-    info!("Player {:?}", transform);
-    info!("Camera {:?}", transform_cam);
-    
-    let axis_vector = action_state
-        .clamped_axis_pair(PlayerActions::Move)
-        .unwrap()
-        .x();
-
-    let mut speed_camera = 10.;
-    //TODO: valocity for camera
-    // if (transform_cam.translation.x.abs() - transform.translation.x.abs()).abs() < 150.0 {
-    //     speed_camera = 10.5;
-    // } else if (transform_cam.translation.x.abs() - transform.translation.x.abs()).abs() > 150.0 {
-    //     speed_camera = 6.5;
-    // }
-
-    if axis_vector > 0.01 {
-        move_event_writer.send(ParallaxMoveEvent {
-            camera_move_speed: Vec2::new(speed_camera, 0.0),
-        });
-    } else if axis_vector < -0.01 {
-        move_event_writer.send(ParallaxMoveEvent {
-            camera_move_speed: Vec2::new(-speed_camera, 0.0),
-        });
-    }
-
-    // match player.current_state {
-    //     PlayerStates::Jump => move_event_writer.send(ParallaxMoveEvent {
-    //         camera_move_speed: Vec2::new(0.0, 3.0),
-    //     }),
-    //     PlayerStates::Fall => move_event_writer.send(ParallaxMoveEvent {
-    //         camera_move_speed: Vec2::new(0.0, -3.0),
-    //     }),
-    //     _ => (),
-    // }
 }
 
 fn camera_settings(
@@ -263,21 +239,6 @@ fn camera_settings(
     let zoom_delta = action_state.value(CameraActions::Zoom);
 
     projection.scale *= 1. - zoom_delta * CAMERA_ZOOM_RATE;
-}
-
-fn pan_camera(mut query: Query<(&mut Transform, &ActionState<CameraActions>), With<Camera2d>>) {
-    const CAMERA_PAN_RATE: f32 = 10.;
-
-    let (mut camera_transform, action_state) = query.single_mut();
-
-    // When using the `MouseWheelDirection` type, mouse wheel inputs can be treated like simple buttons
-    if action_state.pressed(CameraActions::PanLeft) {
-        camera_transform.translation.x -= CAMERA_PAN_RATE;
-    }
-
-    if action_state.pressed(CameraActions::PanRight) {
-        camera_transform.translation.x += CAMERA_PAN_RATE;
-    }
 }
 
 fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
@@ -299,6 +260,9 @@ fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
     let grid_size = tile_size.into();
     let map_type = TilemapType::default();
 
+    let tile_scale = 10.;
+    let tile_y = -400.;
+
     commands.entity(tilemap_entity).insert(TilemapBundle {
         grid_size,
         map_type,
@@ -306,67 +270,60 @@ fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
         storage: tile_storage,
         texture: TilemapTexture::Single(texture_handle.clone()),
         tile_size,
-        transform: Transform::from_xyz(-4976., -374., 1.).with_scale(Vec3::splat(3.)),
+        transform: Transform::from_xyz(-5000., tile_y, 1.).with_scale(Vec3::splat(tile_scale)),
         ..Default::default()
     });
 
+    let colider_radius = 200.;
     commands
-        .spawn(Collider::cuboid(5000., 50.))
+        .spawn(Collider::cuboid(5000., colider_radius))
         .insert(RigidBody::Fixed)
         .insert(TransformBundle::from_transform(Transform::from_xyz(
-            0., -400., 0.,
+            0., tile_y + (tile_size.y * tile_scale)/2. - colider_radius, 0.,
         )));
 }
 
 fn setup_player(mut commands: Commands) {
-    commands.spawn(PlayerBundle {
-        name: Name("Player".to_string()),
-        player: Player {
-            rotation: 1,
-            velocity: Vec2::default(),
-            current_state: PlayerStates::default(),
-        },
-        sprite: SpriteBundle {
-            sprite: Sprite {
-                color: Color::hex("969696").unwrap(),
-                custom_size: Some(Vec2::new(60., 140.)),
+    commands
+        .spawn(PlayerBundle {
+            name: Name("Player".to_string()),
+            player: Player {
+                rotation: 1,
+                velocity: Vec2::default(),
+                current_state: PlayerStates::default(),
+            },
+            sprite: SpriteBundle {
+                sprite: Sprite {
+                    color: Color::hex("00fc43").unwrap(),
+                    custom_size: Some(Vec2::new(60., 140.)),
+                    ..Default::default()
+                },
+                transform: Transform::from_xyz(0., 400., 10.),
                 ..Default::default()
             },
-            transform: Transform::from_xyz(0., 400., 10.),
-            ..Default::default()
-        },
-        input: InputManagerBundle::<PlayerActions> {
-            action_state: ActionState::default(),
-            input_map: InputMap::default()
-                .insert(DualAxis::left_stick(), PlayerActions::Move)
-                .insert(VirtualDPad::wasd(), PlayerActions::Move)
-                .insert(VirtualDPad::arrow_keys(), PlayerActions::Move)
-                .insert(KeyCode::Space, PlayerActions::Jump)
-                .insert(GamepadButtonType::South, PlayerActions::Jump)
-                .insert(KeyCode::LShift, PlayerActions::Dash)
-                .insert(GamepadButtonType::East, PlayerActions::Dash)
-                .set_gamepad(Gamepad { id: 0 })
-                .build(),
-        },
-        rigid_body: RigidBody::KinematicVelocityBased,
-        controller: KinematicCharacterController {
-            slide: true,
-            ..default()
-        },
-        controller_output: KinematicCharacterControllerOutput::default(),
-        collider: Collider::cuboid(30., 70.),
-    }).insert(Camera2dBundle::default())
-    .insert(InputManagerBundle::<CameraActions> {
-        input_map: InputMap::default()
-            .insert(SingleAxis::mouse_wheel_y(), CameraActions::Zoom)
-            .insert(MouseWheelDirection::Left, CameraActions::PanLeft)
-            .insert(MouseWheelDirection::Right, CameraActions::PanRight)
-            .build(),
-        ..default()
-    })
-    .insert(ParallaxCameraComponent);
+            input: InputManagerBundle::<PlayerActions> {
+                action_state: ActionState::default(),
+                input_map: InputMap::default()
+                    .insert(DualAxis::left_stick(), PlayerActions::Move)
+                    .insert(VirtualDPad::wasd(), PlayerActions::Move)
+                    .insert(VirtualDPad::arrow_keys(), PlayerActions::Move)
+                    .insert(KeyCode::Space, PlayerActions::Jump)
+                    .insert(GamepadButtonType::South, PlayerActions::Jump)
+                    .insert(KeyCode::LShift, PlayerActions::Dash)
+                    .insert(GamepadButtonType::East, PlayerActions::Dash)
+                    .set_gamepad(Gamepad { id: 0 })
+                    .build(),
+            },
+            rigid_body: RigidBody::KinematicVelocityBased,
+            controller: KinematicCharacterController {
+                slide: true,
+                ..default()
+            },
+            controller_output: KinematicCharacterControllerOutput::default(),
+            collider: Collider::cuboid(30., 70.),
+        });
+    // .insert(ParallaxCameraComponent);
 }
-
 
 fn move_player(
     time: Res<Time>,
@@ -394,7 +351,7 @@ fn move_player(
     let dt = time.delta_seconds();
 
     // TODO: global variable
-    let speed = 75.0;
+    let speed = 58.0;
     let jump_impulse = 1000.0;
     let mut instant_acceleration = Vec2::ZERO;
     let mut instant_velocity = player.velocity;
@@ -402,10 +359,10 @@ fn move_player(
     // physics simulation
     if grounded {
         // friction
-        instant_velocity.x *= 0.85;
+        instant_velocity.x *= 0.9;
     } else {
         // friction in jump
-        instant_velocity.x *= 0.9;
+        instant_velocity.x *= 0.95;
         // gravity
         if !grounded {
             instant_acceleration += Vec2::Y * rapier_config.gravity;
@@ -487,6 +444,6 @@ fn move_player(
     instant_velocity += Vec2::new(axis_vector * speed, y);
     instant_velocity = instant_velocity.clamp(Vec2::splat(-1000.0), Vec2::splat(1000.0));
     player.velocity = (instant_acceleration * dt) + instant_velocity;
-    controller.translation =
-        Some(controller.translation.unwrap_or(Vec2::new(0., 0.)) + player.velocity * dt);
+    let translation = controller.translation.unwrap_or(Vec2::new(0., 0.)) + player.velocity * dt;
+    controller.translation = Some(translation);
 }
