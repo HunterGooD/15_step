@@ -6,13 +6,9 @@ use bevy::{
     window::{PresentMode, WindowMode},
 };
 use bevy_ecs_tilemap::prelude::*;
-use bevy_parallax::{
-    LayerData, LayerSpeed, ParallaxCameraComponent, ParallaxMoveEvent, ParallaxPlugin,
-    ParallaxResource,
-};
 
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use bevy_rapier2d::{na::ComplexField, prelude::*};
+use bevy_rapier2d::prelude::*;
 use leafwing_input_manager::prelude::*;
 use leafwing_input_manager::InputManagerBundle;
 
@@ -29,6 +25,7 @@ fn main() {
                         resizable: false,
                         present_mode: PresentMode::AutoVsync,
                         // mode: WindowMode::Fullscreen,
+                        mode: WindowMode::Windowed,
                         ..default()
                     }),
                     ..default()
@@ -40,62 +37,6 @@ fn main() {
         .add_plugin(FrameTimeDiagnosticsPlugin)
         .add_plugin(WorldInspectorPlugin::default())
         .add_plugin(TilemapPlugin)
-        // .add_plugin(ParallaxPlugin)
-        // .insert_resource(ParallaxResource {
-        //     layer_data: vec![
-        //         LayerData {
-        //             speed: LayerSpeed::Horizontal(0.9),
-        //             path: "tiles/forest/background/layer_1.png".to_string(),
-        //             tile_size: Vec2::new(320.0, 180.0),
-        //             cols: 1,
-        //             rows: 1,
-        //             scale: 30.5,
-        //             z: 0.0,
-        //             ..Default::default()
-        //         },
-        //         LayerData {
-        //             speed: LayerSpeed::Horizontal(0.7),
-        //             path: "tiles/forest/background/layer_2.png".to_string(),
-        //             tile_size: Vec2::new(320.0, 180.0),
-        //             cols: 1,
-        //             rows: 1,
-        //             scale: 25.5,
-        //             z: 1.0,
-        //             ..Default::default()
-        //         },
-        //         LayerData {
-        //             speed: LayerSpeed::Horizontal(0.5),
-        //             path: "tiles/forest/background/layer_3.png".to_string(),
-        //             tile_size: Vec2::new(320.0, 180.0),
-        //             cols: 1,
-        //             rows: 1,
-        //             scale: 25.5,
-        //             z: 2.0,
-        //             ..Default::default()
-        //         },
-        //         LayerData {
-        //             speed: LayerSpeed::Horizontal(0.3),
-        //             path: "tiles/forest/background/layer_2.png".to_string(),
-        //             tile_size: Vec2::new(320.0, 180.0),
-        //             cols: 1,
-        //             rows: 1,
-        //             scale: 20.5,
-        //             z: 3.0,
-        //             ..Default::default()
-        //         },
-        //         LayerData {
-        //             speed: LayerSpeed::Horizontal(0.1),
-        //             path: "tiles/forest/background/layer_3.png".to_string(),
-        //             tile_size: Vec2::new(320.0, 180.0),
-        //             cols: 1,
-        //             rows: 1,
-        //             scale: 15.5,
-        //             z: 4.0,
-        //             ..Default::default()
-        //         },
-        //     ],
-        //     ..Default::default()
-        // })
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0)) // create world rapier physics
         .insert_resource(RapierConfiguration {
             gravity: Vec2::new(0.0, -2000.0),
@@ -227,7 +168,6 @@ fn setup_graphics(mut commands: Commands) {
                 .build(),
             ..default()
         });
-    //     .insert(ParallaxCameraComponent);
 }
 
 fn camera_settings(
@@ -322,7 +262,6 @@ fn setup_player(mut commands: Commands) {
             controller_output: KinematicCharacterControllerOutput::default(),
             collider: Collider::cuboid(30., 70.),
         });
-    // .insert(ParallaxCameraComponent);
 }
 
 fn move_player(

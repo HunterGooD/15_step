@@ -23,4 +23,3 @@ leafwing-input-manager = "^0.9.0"
 bevy-inspector-egui = "^0.18.0"
 # for map decoration
 bevy_ecs_tilemap = "0.10.0"
-bevy-parallax = "0.5.0"
