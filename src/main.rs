@@ -60,7 +60,7 @@ fn follow(
     for mut cam_t in &mut camera_query {
         if let Ok(player_t) = player_query.get_single() {
             let velocity = Vec2::new(cam_t.translation.x, cam_t.translation.y).lerp(
-                Vec2::new(player_t.translation.x, player_t.translation.y+150.),
+                Vec2::new(player_t.translation.x, player_t.translation.y + 150.),
                 20. * time.delta_seconds(),
             );
 
@@ -182,25 +182,107 @@ fn camera_settings(
 }
 
 fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let texture_handle: Handle<Image> = asset_server.load("tiles/forest/tileset.png"); // 31 x 22 tiles
-    let map_size = TilemapSize { x: 500, y: 1 };
+    // grass
+    let angle_start = 0;
+    let ground_blocks = 1..7;
+    let ground_blocks_contains = 45..49; // not include angle contains
+    let angle_end = 7;
+
+    let texture_handle: Handle<Image> = asset_server.load("tiles/forest/tileset.png"); // 21 x 15 tiles
+    let map_size = TilemapSize { x: 21, y: 15 };
 
     let mut tile_storage = TileStorage::empty(map_size);
     let tilemap_entity = commands.spawn_empty().id();
 
-    fill_tilemap(
-        TileTextureIndex(1),
-        map_size,
-        TilemapId(tilemap_entity),
-        &mut commands,
-        &mut tile_storage,
-    );
+    let mut map = vec![
+        [
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        ],
+        [
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        ],
+        [
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        ],
+        [
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        ],
+        [
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        ],
+        [
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        ],
+        [
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        ],
+        [
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        ],
+        [
+            -1, -1, -1, -1, -1, -1, -1, -1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1,
+        ],
+        [
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        ],
+        [
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        ],
+        [
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        ],
+        [
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        ],
+        [
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        ],
+        [
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        ],
+    ];
+    map.reverse();
 
-    let tile_size = TilemapTileSize { x: 16.0, y: 16.0 };
-    let grid_size = tile_size.into();
+    let mut pos_x = 0f32;
+    let mut pos_y = -400f32;
+    let tile_scale = 3f32;
+    let colider_block = 24f32 * tile_scale;
+    for y in 0..map_size.y {
+        for x in 0..map_size.x {
+            let tile_idx = map[y as usize][x as usize]; // FIXME: not safe operation
+            if tile_idx == -1 {
+                pos_x += colider_block;
+                continue;
+            }
+            let tile_pos = TilePos { x, y };
+            let idx = TileTextureIndex(tile_idx as u32);
+            let tile_entity = commands
+                .spawn(TileBundle {
+                    position: tile_pos,
+                    tilemap_id: TilemapId(tilemap_entity),
+                    texture_index: idx,
+                    ..Default::default()
+                })
+                .id();
+            // Here we let the tile storage component know what tiles we have.
+            tile_storage.set(&tile_pos, tile_entity);
+
+            commands
+                .spawn(Collider::cuboid(colider_block / 2f32, colider_block / 2f32))
+                .insert(RigidBody::Fixed)
+                .insert(TransformBundle::from_transform(Transform::from_xyz(
+                    pos_x, pos_y, 0.,
+                )));
+            pos_x += colider_block;
+        }
+        pos_y += colider_block;
+        pos_x = 0f32;
+    }
+
+    let tile_size = TilemapTileSize { x: 24.0, y: 24.0 };
+    let grid_size = TilemapGridSize { x: 24., y: 24. };
     let map_type = TilemapType::default();
 
-    let tile_scale = 10.;
     let tile_y = -400.;
 
     commands.entity(tilemap_entity).insert(TilemapBundle {
@@ -210,58 +292,59 @@ fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
         storage: tile_storage,
         texture: TilemapTexture::Single(texture_handle.clone()),
         tile_size,
-        transform: Transform::from_xyz(-5000., tile_y, 1.).with_scale(Vec3::splat(tile_scale)),
+        transform: Transform::from_xyz(0., tile_y, 1.).with_scale(Vec3::splat(tile_scale)),
         ..Default::default()
     });
 
     let colider_radius = 200.;
     commands
-        .spawn(Collider::cuboid(5000., colider_radius))
+        .spawn(Collider::cuboid(15000., colider_radius))
         .insert(RigidBody::Fixed)
         .insert(TransformBundle::from_transform(Transform::from_xyz(
-            0., tile_y + (tile_size.y * tile_scale)/2. - colider_radius, 0.,
+            4500.,
+            tile_y + (tile_size.y * tile_scale) / 2. - colider_radius,
+            0.,
         )));
 }
 
 fn setup_player(mut commands: Commands) {
-    commands
-        .spawn(PlayerBundle {
-            name: Name("Player".to_string()),
-            player: Player {
-                rotation: 1,
-                velocity: Vec2::default(),
-                current_state: PlayerStates::default(),
-            },
-            sprite: SpriteBundle {
-                sprite: Sprite {
-                    color: Color::hex("00fc43").unwrap(),
-                    custom_size: Some(Vec2::new(60., 140.)),
-                    ..Default::default()
-                },
-                transform: Transform::from_xyz(0., 400., 10.),
+    commands.spawn(PlayerBundle {
+        name: Name("Player".to_string()),
+        player: Player {
+            rotation: 1,
+            velocity: Vec2::default(),
+            current_state: PlayerStates::default(),
+        },
+        sprite: SpriteBundle {
+            sprite: Sprite {
+                color: Color::hex("00fc43").unwrap(),
+                custom_size: Some(Vec2::new(60., 140.)),
                 ..Default::default()
             },
-            input: InputManagerBundle::<PlayerActions> {
-                action_state: ActionState::default(),
-                input_map: InputMap::default()
-                    .insert(DualAxis::left_stick(), PlayerActions::Move)
-                    .insert(VirtualDPad::wasd(), PlayerActions::Move)
-                    .insert(VirtualDPad::arrow_keys(), PlayerActions::Move)
-                    .insert(KeyCode::Space, PlayerActions::Jump)
-                    .insert(GamepadButtonType::South, PlayerActions::Jump)
-                    .insert(KeyCode::LShift, PlayerActions::Dash)
-                    .insert(GamepadButtonType::East, PlayerActions::Dash)
-                    .set_gamepad(Gamepad { id: 0 })
-                    .build(),
-            },
-            rigid_body: RigidBody::KinematicVelocityBased,
-            controller: KinematicCharacterController {
-                slide: true,
-                ..default()
-            },
-            controller_output: KinematicCharacterControllerOutput::default(),
-            collider: Collider::cuboid(30., 70.),
-        });
+            transform: Transform::from_xyz(-100., 400., 10.),
+            ..Default::default()
+        },
+        input: InputManagerBundle::<PlayerActions> {
+            action_state: ActionState::default(),
+            input_map: InputMap::default()
+                .insert(DualAxis::left_stick(), PlayerActions::Move)
+                .insert(VirtualDPad::wasd(), PlayerActions::Move)
+                .insert(VirtualDPad::arrow_keys(), PlayerActions::Move)
+                .insert(KeyCode::Space, PlayerActions::Jump)
+                .insert(GamepadButtonType::South, PlayerActions::Jump)
+                .insert(KeyCode::LShift, PlayerActions::Dash)
+                .insert(GamepadButtonType::East, PlayerActions::Dash)
+                .set_gamepad(Gamepad { id: 0 })
+                .build(),
+        },
+        rigid_body: RigidBody::KinematicVelocityBased,
+        controller: KinematicCharacterController {
+            slide: true,
+            ..default()
+        },
+        controller_output: KinematicCharacterControllerOutput::default(),
+        collider: Collider::cuboid(30., 70.),
+    });
 }
 
 fn move_player(
