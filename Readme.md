@@ -41,3 +41,10 @@ This step is practical. It needs to define user input and output, while doing ev
 ## 4 Map
 
 You need to select map tiles, collisions, backgrounds and other decorations, you can also interact with some elements of the map such as doors and so on. At this stage, map generation is not needed yet, everything can be hardcoded.
+
+## 5 Saving/Loading 
+
+(First: Note that you can initially do away with save and load entirely - a feature not present in many early implementations - and generate your dungeons instead of hard-coding them, which is arguably a more roguelike approach!)
+I skipped this step due to the complexity of implementing collider serialization from the bevy_rapier2d library. There is a method how it could be implemented, but this is too bad code.
+
+

@@ -1,8 +1,12 @@
-use std::time::Duration;
+use std::fs::File;
+use std::path::Path;
+use std::io::Write;
 
 use bevy::{
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     prelude::*,
+    tasks::IoTaskPool,
+    utils::Duration,
     window::{PresentMode, WindowMode},
 };
 use bevy_ecs_tilemap::prelude::*;
@@ -31,6 +35,18 @@ fn main() {
                     ..default()
                 }),
         )
+
+        .register_type::<Name>()
+        .register_type::<Player>()
+        .register_type::<JumpInfo>()
+        .register_type::<DashInfo>()
+        .register_type::<PlayerActions>()
+        .register_type::<PlayerStates>()
+        .register_type::<bevy::math::Rect>()
+        .register_type::<core::option::Option<bevy::math::Rect>>()
+        .register_type::<core::option::Option<bevy::ecs::entity::Entity>>()
+        .register_type::<core::option::Option<bevy::math::f32::Vec2>>()
+
         .add_plugin(LogDiagnosticsPlugin::default())
         .add_plugin(bevy::diagnostic::SystemInformationDiagnosticsPlugin::default())
         .add_plugin(bevy::diagnostic::EntityCountDiagnosticsPlugin::default())
@@ -45,10 +61,14 @@ fn main() {
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(InputManagerPlugin::<PlayerActions>::default()) // player actions for buttons
         .add_plugin(InputManagerPlugin::<CameraActions>::default())
-        .add_startup_systems((setup_graphics, setup_map, setup_player).chain())
+        .add_startup_system(setup_graphics)
+        .add_startup_system(setup_player.run_if(save_file_not_exist))
+        .add_startup_system(setup_map.run_if(save_file_not_exist))
+        .add_startup_system(load_scene.run_if(not(save_file_not_exist)))
         .add_system(camera_settings)
         .add_system(move_player)
         .add_system(follow)
+        // .add_system(save_scene) // TODO: reflect bevy_rapier_2d collider to serialize scene
         .run();
 }
 
@@ -69,11 +89,12 @@ fn follow(
     }
 }
 
-#[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug)]
+#[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
 enum PlayerActions {
     Move,
     Jump,
     Dash,
+    Save,
 }
 
 // for debug
@@ -84,7 +105,7 @@ enum CameraActions {
     PanRight,
 }
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Default)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Default, Reflect)]
 enum PlayerStates {
     #[default]
     Idle,
@@ -93,19 +114,25 @@ enum PlayerStates {
     Fall,
 }
 
-#[derive(Clone, Default, Debug, Component)]
+#[derive(Clone, Default, Debug, Component, Reflect)]
+#[reflect(Component)]
 struct Name(String);
 
-#[derive(Clone, Default, Debug, Component)]
+#[derive(Clone, Default, Debug, Component, Reflect)]
+#[reflect(Component)]
 struct Player {
-    rotation: i8,
-    velocity: Vec2,
-    current_state: PlayerStates,
+    pub rotation: i8,
+    pub velocity: Vec2,
+    pub current_state: PlayerStates,
 }
+#[derive(Clone, Default, Debug, Component, Reflect)]
+#[reflect(Component)]
+struct Ground(Name);
 
 const MAX_JUMP: u8 = 2;
 
-#[derive(Resource, Debug)]
+#[derive(Resource, Debug, Reflect)]
+#[reflect(Resource)]
 struct JumpInfo {
     count: u8,
     time_up: Timer,
@@ -123,7 +150,8 @@ impl Default for JumpInfo {
 const DASH_FRAMES: u8 = 7;
 const DASH_SPEED_FACTOR: f32 = 0.1;
 
-#[derive(Resource, Debug)]
+#[derive(Resource, Debug, Reflect)]
+#[reflect(Resource)]
 struct DashInfo {
     cooldown_time: Timer,
     evade_time: Timer,
@@ -220,7 +248,10 @@ fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
             -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
         ],
         [
-            -1, -1, -1, -1, -1, -1, -1, -1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1,  0,  1,  1,  1,  1,  1,  1,  3, -1, -1, -1, -1, -1, -1,
+        ],
+        [
+            -1, -1, -1, -1, -1, -1, -1, 63, 64, 65, 64, 65, 64, 65, 66, -1, -1, -1, -1, -1, -1,
         ],
         [
             -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
@@ -229,23 +260,20 @@ fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
             -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
         ],
         [
-            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
         ],
         [
             -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
         ],
         [
-            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        ],
-        [
-            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            0, 1, 2, 1, 2, 1, 2, 1, 2, 1, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 3,
         ],
     ];
     map.reverse();
 
     let mut pos_x = 0f32;
     let mut pos_y = -400f32;
-    let tile_scale = 3f32;
+    let tile_scale = 5f32;
     let colider_block = 24f32 * tile_scale;
     for y in 0..map_size.y {
         for x in 0..map_size.x {
@@ -327,6 +355,8 @@ fn setup_player(mut commands: Commands) {
         input: InputManagerBundle::<PlayerActions> {
             action_state: ActionState::default(),
             input_map: InputMap::default()
+                .insert(KeyCode::Escape, PlayerActions::Save) // delete this
+
                 .insert(DualAxis::left_stick(), PlayerActions::Move)
                 .insert(VirtualDPad::wasd(), PlayerActions::Move)
                 .insert(VirtualDPad::arrow_keys(), PlayerActions::Move)
@@ -345,6 +375,60 @@ fn setup_player(mut commands: Commands) {
         controller_output: KinematicCharacterControllerOutput::default(),
         collider: Collider::cuboid(30., 70.),
     });
+}
+
+const SCENE_FILE_PATH: &str = "data/scenes/test_scene.scn.ron";
+
+fn save_file_not_exist() -> bool {
+    let path_file = format!("assets/{SCENE_FILE_PATH}");
+    let path_file = Path::new(&path_file);
+    !path_file.exists()
+}
+
+fn load_scene(mut cmd: Commands, asset_server: Res<AssetServer>) {
+    cmd.spawn(DynamicSceneBundle {
+        scene: asset_server.load(SCENE_FILE_PATH),
+        ..default()
+    });
+}
+
+fn save_scene(world: &mut World) { 
+    let mut q = world.query::<&ActionState<PlayerActions>>();
+    let actions = q.single(world);
+    let save_pressed = actions.just_pressed(PlayerActions::Save);
+
+    if !save_pressed {
+        return 
+    }
+    // let scene = World::new();
+    info!("Save start!");
+    let mut player = world.query_filtered::<Entity, With<Player>>();
+    // TODO: change collider to ground component and create startup function generate colliders, set input player
+    let mut colliders= world.query_filtered::<Entity, With<Collider>>();
+    // let mut map = world.query_filtered::<Entity, With<TilemapSize>>();
+    let mut scene = DynamicSceneBuilder::from_world(world);
+    scene.extract_entities(player.iter(world));
+    scene.extract_entities(colliders.iter(world));
+    // scene.extract_entities(map.iter(world));
+    
+    let type_registry = world.resource::<AppTypeRegistry>();
+    let ron_scene = match scene.build().serialize_ron(&type_registry) {
+        Ok(s) => s,
+        Err(err) => {
+            info!("{:?}", err);
+            return;
+        }
+    };  // dialog window error
+    #[cfg(not(target_arch = "wasm32"))]
+    IoTaskPool::get()
+        .spawn(async move {
+            // Write the scene RON data to file
+            File::create(format!("assets/{SCENE_FILE_PATH}"))
+                .and_then(|mut file| file.write(ron_scene.as_bytes()))
+                .expect("Error while writing scene to file");
+        })
+        .detach(); 
+    info!("Save end!");
 }
 
 fn move_player(
