@@ -1,6 +1,6 @@
-use std::fs::File;
-use std::path::Path;
 use std::io::Write;
+use std::path::Path;
+use std::{default, fs::File};
 
 use bevy::{
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
@@ -35,7 +35,7 @@ fn main() {
                     ..default()
                 }),
         )
-
+        // for save scene
         .register_type::<Name>()
         .register_type::<Player>()
         .register_type::<JumpInfo>()
@@ -46,7 +46,10 @@ fn main() {
         .register_type::<core::option::Option<bevy::math::Rect>>()
         .register_type::<core::option::Option<bevy::ecs::entity::Entity>>()
         .register_type::<core::option::Option<bevy::math::f32::Vec2>>()
-
+        // end register type
+        // register events 
+        .add_event::<StopJump>()
+        // end register events
         .add_plugin(LogDiagnosticsPlugin::default())
         .add_plugin(bevy::diagnostic::SystemInformationDiagnosticsPlugin::default())
         .add_plugin(bevy::diagnostic::EntityCountDiagnosticsPlugin::default())
@@ -63,11 +66,13 @@ fn main() {
         .add_plugin(InputManagerPlugin::<CameraActions>::default())
         .add_startup_system(setup_graphics)
         .add_startup_system(setup_player.run_if(save_file_not_exist))
+        .add_startup_system(spawn_enemy)
         .add_startup_system(setup_map.run_if(save_file_not_exist))
         .add_startup_system(load_scene.run_if(not(save_file_not_exist)))
         .add_system(camera_settings)
         .add_system(move_player)
         .add_system(follow)
+        .add_system(player_collision)
         // .add_system(save_scene) // TODO: reflect bevy_rapier_2d collider to serialize scene
         .run();
 }
@@ -114,17 +119,34 @@ enum PlayerStates {
     Fall,
 }
 
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Default, Reflect)]
+enum EnemyStates {
+    #[default]
+    Idle,
+    Run,
+    Atack,
+}
+
 #[derive(Clone, Default, Debug, Component, Reflect)]
 #[reflect(Component)]
 struct Name(String);
 
 #[derive(Clone, Default, Debug, Component, Reflect)]
 #[reflect(Component)]
-struct Player {
+struct Player(Name);
+
+#[derive(Clone, Default, Debug, Component, Reflect)]
+#[reflect(Component)]
+struct Enemy(Name);
+
+#[derive(Clone, Default, Debug, Component, Reflect)]
+#[reflect(Component)]
+struct ActiveEntity<T: Default> {
     pub rotation: i8,
     pub velocity: Vec2,
-    pub current_state: PlayerStates,
+    pub current_state: T,
 }
+
 #[derive(Clone, Default, Debug, Component, Reflect)]
 #[reflect(Component)]
 struct Ground(Name);
@@ -146,6 +168,9 @@ impl Default for JumpInfo {
         }
     }
 }
+
+#[derive(Default, Debug)]
+struct StopJump;
 
 const DASH_FRAMES: u8 = 7;
 const DASH_SPEED_FACTOR: f32 = 0.1;
@@ -174,10 +199,23 @@ impl Default for DashInfo {
 
 #[derive(Bundle, Default)]
 struct PlayerBundle {
-    name: Name,
-    player: Player,
+    name: Player,
+    player: ActiveEntity<PlayerStates>,
     sprite: SpriteBundle,
     input: InputManagerBundle<PlayerActions>,
+    rigid_body: RigidBody,
+    controller: KinematicCharacterController,
+    controller_output: KinematicCharacterControllerOutput,
+    collider: Collider,
+}
+
+//TODO: create abstract entity bundle
+
+#[derive(Bundle, Default)]
+struct EnemyBundle {
+    name: Enemy,
+    enemy: ActiveEntity<EnemyStates>,
+    sprite: SpriteBundle,
     rigid_body: RigidBody,
     controller: KinematicCharacterController,
     controller_output: KinematicCharacterControllerOutput,
@@ -210,12 +248,6 @@ fn camera_settings(
 }
 
 fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
-    // grass
-    let angle_start = 0;
-    let ground_blocks = 1..7;
-    let ground_blocks_contains = 45..49; // not include angle contains
-    let angle_end = 7;
-
     let texture_handle: Handle<Image> = asset_server.load("tiles/forest/tileset.png"); // 21 x 15 tiles
     let map_size = TilemapSize { x: 21, y: 15 };
 
@@ -248,7 +280,7 @@ fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
             -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
         ],
         [
-            -1, -1, -1, -1, -1, -1, -1,  0,  1,  1,  1,  1,  1,  1,  3, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, 0, 1, 1, 1, 1, 1, 1, 3, -1, -1, -1, -1, -1, -1,
         ],
         [
             -1, -1, -1, -1, -1, -1, -1, 63, 64, 65, 64, 65, 64, 65, 66, -1, -1, -1, -1, -1, -1,
@@ -260,10 +292,10 @@ fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
             -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
         ],
         [
-            -1, -1, -1, -1, -1, -1, -1, -1, -1, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, 1, -1, -1, -1, -1, -1, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
         ],
         [
-            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
         ],
         [
             0, 1, 2, 1, 2, 1, 2, 1, 2, 1, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 3,
@@ -335,10 +367,37 @@ fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
         )));
 }
 
+fn spawn_enemy(mut commands: Commands) {
+    commands.spawn(EnemyBundle {
+        name: Enemy(Name("Slime".to_string())),
+        enemy: ActiveEntity {
+            rotation: 1,
+            velocity: Vec2::default(),
+            current_state: EnemyStates::default(),
+        },
+        sprite: SpriteBundle {
+            sprite: Sprite {
+                color: Color::hex("fc0303").unwrap(),
+                custom_size: Some(Vec2::splat(30f32)),
+                ..default()
+            },
+            transform: Transform::from_xyz(200f32, 100f32, 10.),
+            ..default()
+        },
+        rigid_body: RigidBody::KinematicVelocityBased,
+        controller: KinematicCharacterController {
+            slide: true,
+            ..default()
+        },
+        controller_output: KinematicCharacterControllerOutput::default(),
+        collider: Collider::cuboid(15., 15.),
+    });
+}
+
 fn setup_player(mut commands: Commands) {
     commands.spawn(PlayerBundle {
-        name: Name("Player".to_string()),
-        player: Player {
+        name: Player(Name("Player".to_string())),
+        player: ActiveEntity {
             rotation: 1,
             velocity: Vec2::default(),
             current_state: PlayerStates::default(),
@@ -356,7 +415,6 @@ fn setup_player(mut commands: Commands) {
             action_state: ActionState::default(),
             input_map: InputMap::default()
                 .insert(KeyCode::Escape, PlayerActions::Save) // delete this
-
                 .insert(DualAxis::left_stick(), PlayerActions::Move)
                 .insert(VirtualDPad::wasd(), PlayerActions::Move)
                 .insert(VirtualDPad::arrow_keys(), PlayerActions::Move)
@@ -392,25 +450,25 @@ fn load_scene(mut cmd: Commands, asset_server: Res<AssetServer>) {
     });
 }
 
-fn save_scene(world: &mut World) { 
+fn save_scene(world: &mut World) {
     let mut q = world.query::<&ActionState<PlayerActions>>();
     let actions = q.single(world);
     let save_pressed = actions.just_pressed(PlayerActions::Save);
 
     if !save_pressed {
-        return 
+        return;
     }
     // let scene = World::new();
     info!("Save start!");
     let mut player = world.query_filtered::<Entity, With<Player>>();
     // TODO: change collider to ground component and create startup function generate colliders, set input player
-    let mut colliders= world.query_filtered::<Entity, With<Collider>>();
+    let mut colliders = world.query_filtered::<Entity, With<Collider>>();
     // let mut map = world.query_filtered::<Entity, With<TilemapSize>>();
     let mut scene = DynamicSceneBuilder::from_world(world);
     scene.extract_entities(player.iter(world));
     scene.extract_entities(colliders.iter(world));
     // scene.extract_entities(map.iter(world));
-    
+
     let type_registry = world.resource::<AppTypeRegistry>();
     let ron_scene = match scene.build().serialize_ron(&type_registry) {
         Ok(s) => s,
@@ -418,7 +476,7 @@ fn save_scene(world: &mut World) {
             info!("{:?}", err);
             return;
         }
-    };  // dialog window error
+    }; // dialog window error
     #[cfg(not(target_arch = "wasm32"))]
     IoTaskPool::get()
         .spawn(async move {
@@ -427,7 +485,7 @@ fn save_scene(world: &mut World) {
                 .and_then(|mut file| file.write(ron_scene.as_bytes()))
                 .expect("Error while writing scene to file");
         })
-        .detach(); 
+        .detach();
     info!("Save end!");
 }
 
@@ -439,12 +497,13 @@ fn move_player(
     mut controller_query: Query<
         (
             &ActionState<PlayerActions>,
-            &mut Player,
+            &mut ActiveEntity<PlayerStates>,
             &mut KinematicCharacterController,
             Option<&KinematicCharacterControllerOutput>,
         ),
         With<Player>,
     >,
+    mut stop_jump: EventReader<StopJump>
 ) {
     let (action_state, mut player, mut controller, controller_output) =
         controller_query.single_mut();
@@ -516,7 +575,11 @@ fn move_player(
     if !dash_info.cooldown_time.finished() {
         dash_info.cooldown_time.tick(time.delta());
     }
-
+    if !stop_jump.is_empty() {
+        stop_jump.clear();
+        jump_info.time_up.tick(Duration::from_secs(1));
+        instant_velocity.y = 1.;
+    } 
     if player.current_state == PlayerStates::Jump {
         jump_info.time_up.tick(time.delta());
         if jump_info.time_up.finished() {
@@ -553,3 +616,48 @@ fn move_player(
     let translation = controller.translation.unwrap_or(Vec2::new(0., 0.)) + player.velocity * dt;
     controller.translation = Some(translation);
 }
+
+fn player_collision(mut cmd: Commands, q: Query<(&KinematicCharacterControllerOutput, &Transform), With<Player>>, mut stop_jump: EventWriter<StopJump>) {
+    info!("Start collision detect");
+    for (out, transform) in q.iter() {
+        let y_top_player = transform.translation.y + 68.;
+        let y_down_player = transform.translation.y - 68.;
+        info!("Player transform {:?}", transform);
+        for collision in &out.collisions {
+            if  y_top_player < collision.toi.witness1.y { // up collision player
+                // so that the hero starts falling when he hits the ceiling
+                stop_jump.send_default();
+            }
+            
+            if y_down_player < collision.toi.witness1.y && y_top_player > collision.toi.witness1.y { // left and right collision 
+                // slide wall
+            }
+            
+            if y_down_player > collision.toi.witness1.y {
+                // ground
+            }
+            
+            // cmd.spawn(SpriteBundle{
+            //     sprite: Sprite { color: Color::hex("34c6eb").unwrap(), custom_size: Some(Vec2::new(3f32, 10f32)), ..default() }, transform: Transform::from_translation(collision.toi.witness1.extend(0.)), ..default()
+            // });
+            // cmd.spawn(SpriteBundle{
+            //     sprite: Sprite { color: Color::hex("000094").unwrap(), custom_size: Some(Vec2::new(3f32, 10f32)), ..default() }, transform: Transform::from_translation(collision.toi.witness2.extend(0.)), ..default()
+            // });
+
+
+            // cmd.spawn(SpriteBundle{
+            //     sprite: Sprite { color: Color::hex("34c6eb").unwrap(), custom_size: Some(Vec2::new(10f32, 3f32)), ..default() }, transform: Transform::from_translation(collision.toi.witness1.extend(0.)), ..default()
+            // });
+            // cmd.spawn(SpriteBundle{
+            //     sprite: Sprite { color: Color::hex("000094").unwrap(), custom_size: Some(Vec2::new(10f32, 3f32)), ..default() }, transform: Transform::from_translation(collision.toi.witness2.extend(0.)), ..default()
+            // });
+
+
+            // info!("{:?}", collision);
+        }
+    }
+    info!("End collision detect");
+}
+// 2023-07-24T13:17:44.160618Z  INFO first_game: CharacterCollision { entity: 53v0, character_translation: Vec2(749.32275, 82.03036), character_rotation: 0.0, translation_applied: Vec2(0.0, 0.0), translation_remaining: Vec2(16.93062, -17.50391), toi: Toi { toi: 0.009614948, witness1: Vec2(780.0, 145.2335), witness2: Vec2(29.999996, 63.894253), normal1: Vec2(-1.0, 3.520538e-5), normal2: Vec2(1.0, -3.520538e-5), status: Converged } }
+//2023-07-24T13:19:55.576577Z  INFO first_game: CharacterCollision { entity: 82v0, character_translation: Vec2(-99.98577, -268.6), character_rotation: 0.0, translation_applied: Vec2(0.0, 0.0), translation_remaining: Vec2(0.0, -16.575462), toi: Toi { toi: 0.013999939, witness1: Vec2(-90.80467, -340.0), witness2: Vec2(9.181595, -70.00001), normal1: Vec2(-0.0, 1.0), normal2: Vec2(0.0, -1.0), status: Converged } }
+//2023-07-24T13:21:03.825734Z  INFO first_game: CharacterCollision { entity: 82v0, character_translation: Vec2(-1636.5319, -268.9542), character_rotation: 0.0, translation_applied: Vec2(-9.517902, 0.0), translation_remaining: Vec2(0.0, -16.410189), toi: Toi { toi: 0.010458237, witness1: Vec2(-1624.2828, -340.0), witness2: Vec2(12.24823, -70.00001), normal1: Vec2(-0.0007295108, 0.99999976), normal2: Vec2(0.0007295108, -0.99999976), status: Converged } }
