@@ -1,6 +1,6 @@
+use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use std::{default, fs::File};
 
 use bevy::{
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
@@ -47,8 +47,9 @@ fn main() {
         .register_type::<core::option::Option<bevy::ecs::entity::Entity>>()
         .register_type::<core::option::Option<bevy::math::f32::Vec2>>()
         // end register type
-        // register events 
+        // register events
         .add_event::<StopJump>()
+        .add_event::<SlideEvent>()
         // end register events
         .add_plugin(LogDiagnosticsPlugin::default())
         .add_plugin(bevy::diagnostic::SystemInformationDiagnosticsPlugin::default())
@@ -106,8 +107,6 @@ enum PlayerActions {
 #[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug)]
 enum CameraActions {
     Zoom,
-    PanLeft,
-    PanRight,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Default, Reflect)]
@@ -172,6 +171,16 @@ impl Default for JumpInfo {
 #[derive(Default, Debug)]
 struct StopJump;
 
+#[derive(Default, Debug)]
+struct SlideEvent(WallPosition);
+
+#[derive(Default, Debug, Clone)]
+enum WallPosition {
+    #[default]
+    Right,
+    Left,
+}
+
 const DASH_FRAMES: u8 = 7;
 const DASH_SPEED_FACTOR: f32 = 0.1;
 
@@ -187,7 +196,7 @@ struct DashInfo {
 impl Default for DashInfo {
     fn default() -> Self {
         let mut cooldown_timer = Timer::new(Duration::from_millis(350), TimerMode::Once);
-        cooldown_timer.tick(Duration::from_secs(1)); // finished on init
+        cooldown_timer.tick(Duration::from_secs_f32(1.5)); // finished on init
         Self {
             cooldown_time: cooldown_timer,
             evade_time: Timer::new(Duration::from_millis(50), TimerMode::Once),
@@ -229,8 +238,6 @@ fn setup_graphics(mut commands: Commands) {
         .insert(InputManagerBundle::<CameraActions> {
             input_map: InputMap::default()
                 .insert(SingleAxis::mouse_wheel_y(), CameraActions::Zoom)
-                .insert(MouseWheelDirection::Left, CameraActions::PanLeft)
-                .insert(MouseWheelDirection::Right, CameraActions::PanRight)
                 .build(),
             ..default()
         });
@@ -365,33 +372,45 @@ fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
             tile_y + (tile_size.y * tile_scale) / 2. - colider_radius,
             0.,
         )));
+    commands
+        .spawn(Collider::cuboid(10., 200.))
+        .insert(RigidBody::Fixed)
+        .insert(TransformBundle::from_transform(Transform::from_xyz(
+            -200., 200., 0.,
+        )));
 }
 
 fn spawn_enemy(mut commands: Commands) {
-    commands.spawn(EnemyBundle {
-        name: Enemy(Name("Slime".to_string())),
-        enemy: ActiveEntity {
-            rotation: 1,
-            velocity: Vec2::default(),
-            current_state: EnemyStates::default(),
-        },
-        sprite: SpriteBundle {
-            sprite: Sprite {
-                color: Color::hex("fc0303").unwrap(),
-                custom_size: Some(Vec2::splat(30f32)),
+    commands
+        .spawn(EnemyBundle {
+            name: Enemy(Name("Slime".to_string())),
+            enemy: ActiveEntity {
+                rotation: 1,
+                velocity: Vec2::default(),
+                current_state: EnemyStates::default(),
+            },
+            sprite: SpriteBundle {
+                sprite: Sprite {
+                    color: Color::hex("fc0303").unwrap(),
+                    custom_size: Some(Vec2::splat(30f32)),
+                    ..default()
+                },
+                transform: Transform::from_xyz(200f32, 100f32, 10.),
                 ..default()
             },
-            transform: Transform::from_xyz(200f32, 100f32, 10.),
-            ..default()
-        },
-        rigid_body: RigidBody::KinematicVelocityBased,
-        controller: KinematicCharacterController {
-            slide: true,
-            ..default()
-        },
-        controller_output: KinematicCharacterControllerOutput::default(),
-        collider: Collider::cuboid(15., 15.),
-    });
+            rigid_body: RigidBody::KinematicVelocityBased,
+            controller: KinematicCharacterController {
+                slide: true,
+                // filter_groups: Some(CollisionGroups::new(
+                //     Group::from_bits(0b1001).unwrap(),
+                //     Group::from_bits(0b1101).unwrap(),
+                // )),
+                ..default()
+            },
+            controller_output: KinematicCharacterControllerOutput::default(),
+            collider: Collider::cuboid(15., 15.),
+        })
+        .insert(Sensor);
 }
 
 fn setup_player(mut commands: Commands) {
@@ -428,6 +447,11 @@ fn setup_player(mut commands: Commands) {
         rigid_body: RigidBody::KinematicVelocityBased,
         controller: KinematicCharacterController {
             slide: true,
+            autostep: None,
+            // filter_groups: Some(CollisionGroups::new(
+            //     Group::from_bits(0b1101).unwrap(),
+            //     Group::from_bits(0b1001).unwrap(),
+            // )),
             ..default()
         },
         controller_output: KinematicCharacterControllerOutput::default(),
@@ -503,7 +527,8 @@ fn move_player(
         ),
         With<Player>,
     >,
-    mut stop_jump: EventReader<StopJump>
+    mut stop_jump: EventReader<StopJump>,
+    mut sliding: EventReader<SlideEvent>,
 ) {
     let (action_state, mut player, mut controller, controller_output) =
         controller_query.single_mut();
@@ -521,6 +546,14 @@ fn move_player(
     let mut instant_acceleration = Vec2::ZERO;
     let mut instant_velocity = player.velocity;
 
+    let axis_vector = action_state
+        .clamped_axis_pair(PlayerActions::Move)
+        .unwrap()
+        .x();
+    if axis_vector != 0. {
+        player.rotation = if (axis_vector * 9.) < 0. { -1 } else { 1 };
+    }
+
     // physics simulation
     if grounded {
         // friction
@@ -531,17 +564,27 @@ fn move_player(
         // gravity
         if !grounded {
             instant_acceleration += Vec2::Y * rapier_config.gravity;
+
+            if !sliding.is_empty() {
+                let mut pos_slide = WallPosition::default();
+                for e in sliding.iter() {
+                    pos_slide = e.0.clone();
+                }
+                let pos_slide = match pos_slide {
+                    WallPosition::Left => -1.,
+                    WallPosition::Right => 1.,
+                };
+                if pos_slide == axis_vector {
+                    instant_velocity.y = 1.; // reset inertia
+                    jump_info.count = 1; // TODO: implement method for count jumps
+                    info!("|||||||||||||||||||||||SLIDING|||||||||||||||||||||||");
+                    let slide_scale = -21.;
+                    instant_acceleration += Vec2::Y * slide_scale;
+                    sliding.clear();
+                }
+            }
         }
     }
-
-    let axis_vector = action_state
-        .clamped_axis_pair(PlayerActions::Move)
-        .unwrap()
-        .x();
-    if axis_vector != 0. {
-        player.rotation = if (axis_vector * 9.) < 0. { -1 } else { 1 };
-    }
-
     let mut y = 0.;
     for action in action_state.get_just_pressed() {
         match action {
@@ -579,7 +622,7 @@ fn move_player(
         stop_jump.clear();
         jump_info.time_up.tick(Duration::from_secs(1));
         instant_velocity.y = 1.;
-    } 
+    }
     if player.current_state == PlayerStates::Jump {
         jump_info.time_up.tick(time.delta());
         if jump_info.time_up.finished() {
@@ -617,33 +660,44 @@ fn move_player(
     controller.translation = Some(translation);
 }
 
-fn player_collision(mut cmd: Commands, q: Query<(&KinematicCharacterControllerOutput, &Transform), With<Player>>, mut stop_jump: EventWriter<StopJump>) {
-    info!("Start collision detect");
+fn player_collision(
+    mut cmd: Commands,
+    q: Query<(&KinematicCharacterControllerOutput, &Transform), With<Player>>,
+    mut stop_jump: EventWriter<StopJump>,
+    mut slide: EventWriter<SlideEvent>,
+) {
+    // info!("Start collision detect");
     for (out, transform) in q.iter() {
         let y_top_player = transform.translation.y + 68.;
         let y_down_player = transform.translation.y - 68.;
-        info!("Player transform {:?}", transform);
+        // info!("Player transform {:?}", transform);
         for collision in &out.collisions {
-            if  y_top_player < collision.toi.witness1.y { // up collision player
+            if y_top_player < collision.toi.witness1.y {
+                // up collision player
                 // so that the hero starts falling when he hits the ceiling
                 stop_jump.send_default();
             }
-            
-            if y_down_player < collision.toi.witness1.y && y_top_player > collision.toi.witness1.y { // left and right collision 
+
+            if y_down_player < collision.toi.witness1.y && y_top_player > collision.toi.witness1.y {
+                // left and right collision
                 // slide wall
+                if collision.toi.witness1.x > transform.translation.x {
+                    slide.send(SlideEvent(WallPosition::Right));
+                } else {
+                    slide.send(SlideEvent(WallPosition::Left));
+                }
             }
-            
+
             if y_down_player > collision.toi.witness1.y {
                 // ground
             }
-            
+
             // cmd.spawn(SpriteBundle{
             //     sprite: Sprite { color: Color::hex("34c6eb").unwrap(), custom_size: Some(Vec2::new(3f32, 10f32)), ..default() }, transform: Transform::from_translation(collision.toi.witness1.extend(0.)), ..default()
             // });
             // cmd.spawn(SpriteBundle{
             //     sprite: Sprite { color: Color::hex("000094").unwrap(), custom_size: Some(Vec2::new(3f32, 10f32)), ..default() }, transform: Transform::from_translation(collision.toi.witness2.extend(0.)), ..default()
             // });
-
 
             // cmd.spawn(SpriteBundle{
             //     sprite: Sprite { color: Color::hex("34c6eb").unwrap(), custom_size: Some(Vec2::new(10f32, 3f32)), ..default() }, transform: Transform::from_translation(collision.toi.witness1.extend(0.)), ..default()
@@ -652,11 +706,10 @@ fn player_collision(mut cmd: Commands, q: Query<(&KinematicCharacterControllerOu
             //     sprite: Sprite { color: Color::hex("000094").unwrap(), custom_size: Some(Vec2::new(10f32, 3f32)), ..default() }, transform: Transform::from_translation(collision.toi.witness2.extend(0.)), ..default()
             // });
 
-
             // info!("{:?}", collision);
         }
     }
-    info!("End collision detect");
+    // info!("End collision detect");
 }
 // 2023-07-24T13:17:44.160618Z  INFO first_game: CharacterCollision { entity: 53v0, character_translation: Vec2(749.32275, 82.03036), character_rotation: 0.0, translation_applied: Vec2(0.0, 0.0), translation_remaining: Vec2(16.93062, -17.50391), toi: Toi { toi: 0.009614948, witness1: Vec2(780.0, 145.2335), witness2: Vec2(29.999996, 63.894253), normal1: Vec2(-1.0, 3.520538e-5), normal2: Vec2(1.0, -3.520538e-5), status: Converged } }
 //2023-07-24T13:19:55.576577Z  INFO first_game: CharacterCollision { entity: 82v0, character_translation: Vec2(-99.98577, -268.6), character_rotation: 0.0, translation_applied: Vec2(0.0, 0.0), translation_remaining: Vec2(0.0, -16.575462), toi: Toi { toi: 0.013999939, witness1: Vec2(-90.80467, -340.0), witness2: Vec2(9.181595, -70.00001), normal1: Vec2(-0.0, 1.0), normal2: Vec2(0.0, -1.0), status: Converged } }
