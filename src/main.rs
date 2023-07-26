@@ -7,7 +7,7 @@ use bevy::{
     prelude::*,
     tasks::IoTaskPool,
     utils::Duration,
-    window::{PresentMode, WindowMode},
+    window::{PresentMode, WindowMode}, transform,
 };
 use bevy_ecs_tilemap::prelude::*;
 
@@ -67,11 +67,12 @@ fn main() {
         .add_plugin(InputManagerPlugin::<CameraActions>::default())
         .add_startup_system(setup_graphics)
         .add_startup_system(setup_player.run_if(save_file_not_exist))
-        .add_startup_system(spawn_enemy)
+        .add_startup_system(spawn_enemies)
         .add_startup_system(setup_map.run_if(save_file_not_exist))
         .add_startup_system(load_scene.run_if(not(save_file_not_exist)))
         .add_system(camera_settings)
         .add_system(move_player)
+        .add_system(move_enemy)
         .add_system(follow)
         .add_system(player_collision)
         // .add_system(save_scene) // TODO: reflect bevy_rapier_2d collider to serialize scene
@@ -223,12 +224,23 @@ struct PlayerBundle {
 #[derive(Bundle, Default)]
 struct EnemyBundle {
     name: Enemy,
+    monster_type: MonsterType,
     enemy: ActiveEntity<EnemyStates>,
     sprite: SpriteBundle,
     rigid_body: RigidBody,
     controller: KinematicCharacterController,
     controller_output: KinematicCharacterControllerOutput,
     collider: Collider,
+}
+
+#[derive(Default, Component)]
+enum MonsterType { // create struct for any enemy type
+    #[default]
+    SlowMeele,
+    FastMele,
+
+    RangeSlow, 
+    RangeFast,  
 }
 
 fn setup_graphics(mut commands: Commands) {
@@ -380,37 +392,66 @@ fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
         )));
 }
 
-fn spawn_enemy(mut commands: Commands) {
-    commands
-        .spawn(EnemyBundle {
-            name: Enemy(Name("Slime".to_string())),
-            enemy: ActiveEntity {
-                rotation: 1,
-                velocity: Vec2::default(),
-                current_state: EnemyStates::default(),
-            },
-            sprite: SpriteBundle {
-                sprite: Sprite {
-                    color: Color::hex("fc0303").unwrap(),
-                    custom_size: Some(Vec2::splat(30f32)),
-                    ..default()
-                },
-                transform: Transform::from_xyz(200f32, 100f32, 10.),
+fn spawn_enemies(mut commands: Commands) {
+    commands.spawn(EnemyBundle {
+        name: Enemy(Name("Goblin".to_string())),
+        enemy: ActiveEntity {
+            rotation: 1,
+            velocity: Vec2::default(),
+            current_state: EnemyStates::default(),
+        },
+        monster_type: MonsterType::FastMele,
+        sprite: SpriteBundle {
+            sprite: Sprite {
+                color: Color::hex("fc0315").unwrap(),
+                custom_size: Some(Vec2::new(14., 40.)),
                 ..default()
             },
-            rigid_body: RigidBody::KinematicVelocityBased,
-            controller: KinematicCharacterController {
-                slide: true,
-                // filter_groups: Some(CollisionGroups::new(
-                //     Group::from_bits(0b1001).unwrap(),
-                //     Group::from_bits(0b1101).unwrap(),
-                // )),
+            transform: Transform::from_xyz(150f32, 100f32, 10.),
+            ..default()
+        },
+        rigid_body: RigidBody::KinematicVelocityBased,
+        controller: KinematicCharacterController {
+            slide: true,
+            // filter_groups: Some(CollisionGroups::new(
+            //     Group::from_bits(0b1001).unwrap(),
+            //     Group::from_bits(0b1101).unwrap(),
+            // )),
+            ..default()
+        },
+        controller_output: KinematicCharacterControllerOutput::default(),
+        collider: Collider::cuboid(7., 20.),
+    });
+
+    commands.spawn(EnemyBundle {
+        name: Enemy(Name("Slime".to_string())),
+        enemy: ActiveEntity {
+            rotation: 1,
+            velocity: Vec2::default(),
+            current_state: EnemyStates::default(),
+        },
+        monster_type: MonsterType::SlowMeele,
+        sprite: SpriteBundle {
+            sprite: Sprite {
+                color: Color::hex("fc0303").unwrap(),
+                custom_size: Some(Vec2::splat(30f32)),
                 ..default()
             },
-            controller_output: KinematicCharacterControllerOutput::default(),
-            collider: Collider::cuboid(15., 15.),
-        })
-        .insert(Sensor);
+            transform: Transform::from_xyz(200f32, 100f32, 10.),
+            ..default()
+        },
+        rigid_body: RigidBody::KinematicVelocityBased,
+        controller: KinematicCharacterController {
+            slide: true,
+            // filter_groups: Some(CollisionGroups::new(
+            //     Group::from_bits(0b1001).unwrap(),
+            //     Group::from_bits(0b1101).unwrap(),
+            // )),
+            ..default()
+        },
+        controller_output: KinematicCharacterControllerOutput::default(),
+        collider: Collider::cuboid(15., 15.),
+    });
 }
 
 fn setup_player(mut commands: Commands) {
@@ -660,8 +701,69 @@ fn move_player(
     controller.translation = Some(translation);
 }
 
+fn move_enemy(
+    time: Res<Time>,
+    rapier_config: Res<RapierConfiguration>,
+    mut controller_query: Query<
+        (
+            &MonsterType,
+            &mut ActiveEntity<EnemyStates>,
+            &mut KinematicCharacterController,
+            &Transform,
+            Option<&KinematicCharacterControllerOutput>,
+        ),
+        With<Enemy>,
+    >,
+    player_q: Query<&Transform, With<Player>>,
+) {
+    let player_pos = player_q.single();
+    for (type_enemy, mut enemy, mut controller, enemy_pos, controller_output) in controller_query.iter_mut() {
+        let grounded = match controller_output {
+            Some(out) => out.grounded,
+            None => false,
+        };
+
+        let dt = time.delta_seconds();
+        let speed = 47.0;
+        let mut instant_acceleration = Vec2::ZERO;
+        let mut instant_velocity = enemy.velocity;
+
+        // physics simulation
+        if grounded {
+            // friction
+            instant_velocity.x *= 0.9;
+        } else {
+            // friction in jump
+            instant_velocity.x *= 0.95;
+            // gravity
+            if !grounded {
+                instant_acceleration += Vec2::Y * rapier_config.gravity;
+            }
+        }
+
+        let mut rotation = 1.;
+        if enemy_pos.translation.x > player_pos.translation.x {
+            rotation = -1.;
+        }
+        
+        match type_enemy {
+            MonsterType::FastMele => (),
+            MonsterType::RangeFast => (),
+            MonsterType::RangeSlow => (),
+            MonsterType::SlowMeele => ()
+        }
+
+        // TODO: logic move for enemies
+        instant_velocity += Vec2::new(rotation*speed, 0.);
+        instant_velocity = instant_velocity.clamp(Vec2::splat(-1000.0), Vec2::splat(1000.0));
+        enemy.velocity = (instant_acceleration * dt) + instant_velocity;
+        let translation = controller.translation.unwrap_or(Vec2::new(0., 0.)) + enemy.velocity * dt;
+        controller.translation = Some(translation);
+    }
+}
+
 fn player_collision(
-    mut cmd: Commands,
+    // mut cmd: Commands,
     q: Query<(&KinematicCharacterControllerOutput, &Transform), With<Player>>,
     mut stop_jump: EventWriter<StopJump>,
     mut slide: EventWriter<SlideEvent>,
