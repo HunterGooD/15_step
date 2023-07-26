@@ -489,6 +489,7 @@ fn setup_player(mut commands: Commands) {
         controller: KinematicCharacterController {
             slide: true,
             autostep: None,
+            filter_flags: QueryFilterFlags::EXCLUDE_KINEMATIC,
             // filter_groups: Some(CollisionGroups::new(
             //     Group::from_bits(0b1101).unwrap(),
             //     Group::from_bits(0b1001).unwrap(),
