@@ -72,7 +72,8 @@ fn main() {
         .add_startup_system(load_scene.run_if(not(save_file_not_exist)))
         .add_system(camera_settings)
         .add_system(move_player)
-        .add_system(move_enemy)
+        .add_system(move_enemy_slime)
+        .add_system(move_enemy_goblin)
         .add_system(follow)
         .add_system(player_collision)
         // .add_system(save_scene) // TODO: reflect bevy_rapier_2d collider to serialize scene
@@ -222,9 +223,9 @@ struct PlayerBundle {
 //TODO: create abstract entity bundle
 
 #[derive(Bundle, Default)]
-struct EnemyBundle {
+struct EnemyBundle<T: Default+Component> {
     name: Enemy,
-    monster_type: MonsterType,
+    monster_type: T,
     enemy: ActiveEntity<EnemyStates>,
     sprite: SpriteBundle,
     rigid_body: RigidBody,
@@ -233,15 +234,13 @@ struct EnemyBundle {
     collider: Collider,
 }
 
-#[derive(Default, Component)]
-enum MonsterType { // create struct for any enemy type
-    #[default]
-    SlowMeele,
-    FastMele,
+#[derive(Clone, Default, Debug, Component, Reflect)]
+#[reflect(Component)]
+struct Goblin;
 
-    RangeSlow, 
-    RangeFast,  
-}
+#[derive(Clone, Default, Debug, Component, Reflect)]
+#[reflect(Component)]
+struct Slime;
 
 fn setup_graphics(mut commands: Commands) {
     // Add a camera so we can see the debug-render.
@@ -400,7 +399,7 @@ fn spawn_enemies(mut commands: Commands) {
             velocity: Vec2::default(),
             current_state: EnemyStates::default(),
         },
-        monster_type: MonsterType::FastMele,
+        monster_type: Goblin,
         sprite: SpriteBundle {
             sprite: Sprite {
                 color: Color::hex("fc0315").unwrap(),
@@ -430,7 +429,7 @@ fn spawn_enemies(mut commands: Commands) {
             velocity: Vec2::default(),
             current_state: EnemyStates::default(),
         },
-        monster_type: MonsterType::SlowMeele,
+        monster_type: Slime,
         sprite: SpriteBundle {
             sprite: Sprite {
                 color: Color::hex("fc0303").unwrap(),
@@ -497,7 +496,7 @@ fn setup_player(mut commands: Commands) {
             ..default()
         },
         controller_output: KinematicCharacterControllerOutput::default(),
-        collider: Collider::cuboid(30., 70.),
+        collider: Collider::capsule(Vec2::new(0., 40.), Vec2::new(0.0, -40.0), 30.),
     });
 }
 
@@ -632,7 +631,7 @@ fn move_player(
         match action {
             PlayerActions::Jump => {
                 if jump_info.count >= MAX_JUMP {
-                    return;
+                    continue;
                 }
                 // instant_acceleration.y = 1.;
                 instant_velocity.y = 1.;
@@ -702,23 +701,23 @@ fn move_player(
     controller.translation = Some(translation);
 }
 
-fn move_enemy(
+fn move_enemy_goblin(
     time: Res<Time>,
     rapier_config: Res<RapierConfiguration>,
     mut controller_query: Query<
         (
-            &MonsterType,
+            // &Goblin,
             &mut ActiveEntity<EnemyStates>,
             &mut KinematicCharacterController,
             &Transform,
             Option<&KinematicCharacterControllerOutput>,
         ),
-        With<Enemy>,
+        With<Goblin>,
     >,
     player_q: Query<&Transform, With<Player>>,
 ) {
     let player_pos = player_q.single();
-    for (type_enemy, mut enemy, mut controller, enemy_pos, controller_output) in controller_query.iter_mut() {
+    for (mut enemy, mut controller, enemy_pos, controller_output) in controller_query.iter_mut() {
         let grounded = match controller_output {
             Some(out) => out.grounded,
             None => false,
@@ -746,16 +745,67 @@ fn move_enemy(
         if enemy_pos.translation.x > player_pos.translation.x {
             rotation = -1.;
         }
-        
-        match type_enemy {
-            MonsterType::FastMele => (),
-            MonsterType::RangeFast => (),
-            MonsterType::RangeSlow => (),
-            MonsterType::SlowMeele => ()
-        }
 
         // TODO: logic move for enemies
         instant_velocity += Vec2::new(rotation*speed, 0.);
+        instant_velocity = instant_velocity.clamp(Vec2::splat(-1000.0), Vec2::splat(1000.0));
+        enemy.velocity = (instant_acceleration * dt) + instant_velocity;
+        let translation = controller.translation.unwrap_or(Vec2::new(0., 0.)) + enemy.velocity * dt;
+        controller.translation = Some(translation);
+    }
+}
+
+fn move_enemy_slime(
+    time: Res<Time>,
+    rapier_config: Res<RapierConfiguration>,
+    mut controller_query: Query<
+        (
+            // &Goblin,
+            &mut ActiveEntity<EnemyStates>,
+            &mut KinematicCharacterController,
+            &Transform,
+            Option<&KinematicCharacterControllerOutput>,
+        ),
+        With<Slime>,
+    >,
+    player_q: Query<&Transform, With<Player>>,
+) {
+    let player_pos = player_q.single();
+    for (mut enemy, mut controller, enemy_pos, controller_output) in controller_query.iter_mut() {
+        let grounded = match controller_output {
+            Some(out) => out.grounded,
+            None => false,
+        };
+
+        let dt = time.delta_seconds();
+        let speed = 47.0;
+        let mut instant_acceleration = Vec2::ZERO;
+        let mut instant_velocity = enemy.velocity;
+        let jump_impulse = 400f32;
+        // physics simulation
+        if grounded {
+            // friction
+            instant_velocity.x *= 0.9;
+        } else {
+            // friction in jump
+            instant_velocity.x *= 0.8;
+            // gravity
+            if !grounded {
+                instant_acceleration += Vec2::Y * rapier_config.gravity;
+            }
+        }
+        let mut y = 0f32;
+        if grounded {
+            y = jump_impulse;
+        }
+
+        let mut rotation = 1.;
+        if enemy_pos.translation.x > player_pos.translation.x {
+            rotation = -1.;
+        }
+
+        // TODO: logic move for enemies
+        instant_velocity += Vec2::new(rotation * speed, y);
         instant_velocity = instant_velocity.clamp(Vec2::splat(-1000.0), Vec2::splat(1000.0));
         enemy.velocity = (instant_acceleration * dt) + instant_velocity;
         let translation = controller.translation.unwrap_or(Vec2::new(0., 0.)) + enemy.velocity * dt;
@@ -771,14 +821,22 @@ fn player_collision(
 ) {
     // info!("Start collision detect");
     for (out, transform) in q.iter() {
-        let y_top_player = transform.translation.y + 68.;
-        let y_down_player = transform.translation.y - 68.;
+        const HEIGHT_PLAYER:  f32 = 68.; // size height / 2 -2
+        const WIDTH_PLAYER: f32 = 28.; // sizwe width / 2 - 2
+        let x_left_player = transform.translation.x - WIDTH_PLAYER;
+        let x_right_player = transform.translation.x + WIDTH_PLAYER;
+
+        let y_top_player = transform.translation.y + HEIGHT_PLAYER; 
+        let y_down_player = transform.translation.y - HEIGHT_PLAYER;
+
         // info!("Player transform {:?}", transform);
         for collision in &out.collisions {
             if y_top_player < collision.toi.witness1.y {
                 // up collision player
                 // so that the hero starts falling when he hits the ceiling
-                stop_jump.send_default();
+                if collision.toi.witness1.x > x_left_player && collision.toi.witness1.x < x_right_player { // angel player not top
+                    stop_jump.send_default();
+                }
             }
 
             if y_down_player < collision.toi.witness1.y && y_top_player > collision.toi.witness1.y {
@@ -814,6 +872,3 @@ fn player_collision(
     }
     // info!("End collision detect");
 }
-// 2023-07-24T13:17:44.160618Z  INFO first_game: CharacterCollision { entity: 53v0, character_translation: Vec2(749.32275, 82.03036), character_rotation: 0.0, translation_applied: Vec2(0.0, 0.0), translation_remaining: Vec2(16.93062, -17.50391), toi: Toi { toi: 0.009614948, witness1: Vec2(780.0, 145.2335), witness2: Vec2(29.999996, 63.894253), normal1: Vec2(-1.0, 3.520538e-5), normal2: Vec2(1.0, -3.520538e-5), status: Converged } }
-//2023-07-24T13:19:55.576577Z  INFO first_game: CharacterCollision { entity: 82v0, character_translation: Vec2(-99.98577, -268.6), character_rotation: 0.0, translation_applied: Vec2(0.0, 0.0), translation_remaining: Vec2(0.0, -16.575462), toi: Toi { toi: 0.013999939, witness1: Vec2(-90.80467, -340.0), witness2: Vec2(9.181595, -70.00001), normal1: Vec2(-0.0, 1.0), normal2: Vec2(0.0, -1.0), status: Converged } }
-//2023-07-24T13:21:03.825734Z  INFO first_game: CharacterCollision { entity: 82v0, character_translation: Vec2(-1636.5319, -268.9542), character_rotation: 0.0, translation_applied: Vec2(-9.517902, 0.0), translation_remaining: Vec2(0.0, -16.410189), toi: Toi { toi: 0.010458237, witness1: Vec2(-1624.2828, -340.0), witness2: Vec2(12.24823, -70.00001), normal1: Vec2(-0.0007295108, 0.99999976), normal2: Vec2(0.0007295108, -0.99999976), status: Converged } }
