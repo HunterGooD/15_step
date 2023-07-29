@@ -7,7 +7,7 @@ use bevy::{
     prelude::*,
     tasks::IoTaskPool,
     utils::Duration,
-    window::{PresentMode, WindowMode}, transform,
+    window::{PresentMode, WindowMode},
 };
 use bevy_ecs_tilemap::prelude::*;
 
@@ -76,6 +76,7 @@ fn main() {
         .add_system(move_enemy_goblin)
         .add_system(follow)
         .add_system(player_collision)
+        .add_system(sensor_event.in_base_set(CoreSet::PostUpdate))
         // .add_system(save_scene) // TODO: reflect bevy_rapier_2d collider to serialize scene
         .run();
 }
@@ -148,9 +149,27 @@ struct ActiveEntity<T: Default> {
     pub current_state: T,
 }
 
+#[derive(Clone, Debug, Component, Reflect)]
+#[reflect(Component)]
+struct Health(i32);
+
+impl Default for Health {
+    fn default() -> Self {
+        Self(100)
+    }
+}
+
 #[derive(Clone, Default, Debug, Component, Reflect)]
 #[reflect(Component)]
-struct Ground(Name);
+struct Armor(i32);
+
+#[derive(Clone, Default, Debug, Component, Reflect)]
+#[reflect(Component)]
+struct Strength(i32);
+
+#[derive(Clone, Default, Debug, Component, Reflect)]
+#[reflect(Component)]
+struct Ground(Name); // for ground collider name
 
 const MAX_JUMP: u8 = 2;
 
@@ -209,9 +228,17 @@ impl Default for DashInfo {
 }
 
 #[derive(Bundle, Default)]
+struct Stats {
+    health: Health,
+    armor: Armor,
+    strength: Strength,
+}
+
+#[derive(Bundle, Default)]
 struct PlayerBundle {
     name: Player,
     player: ActiveEntity<PlayerStates>,
+    stats: Stats,
     sprite: SpriteBundle,
     input: InputManagerBundle<PlayerActions>,
     rigid_body: RigidBody,
@@ -223,9 +250,10 @@ struct PlayerBundle {
 //TODO: create abstract entity bundle
 
 #[derive(Bundle, Default)]
-struct EnemyBundle<T: Default+Component> {
+struct EnemyBundle<T: Default + Component> {
     name: Enemy,
     monster_type: T,
+    stats: Stats,
     enemy: ActiveEntity<EnemyStates>,
     sprite: SpriteBundle,
     rigid_body: RigidBody,
@@ -389,6 +417,18 @@ fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
         .insert(TransformBundle::from_transform(Transform::from_xyz(
             -200., 200., 0.,
         )));
+    commands.spawn((
+        TransformBundle::from_transform(Transform::from_xyz(-100., -300., 0.)),
+        Collider::cuboid(10., 20.),
+        Sensor,
+        ActiveEvents::COLLISION_EVENTS
+        // .insert(ActiveEvents::COLLISION_EVENTS)
+    ));
+
+    commands.spawn((
+        Collider::ball(50.),
+        ActiveEvents::COLLISION_EVENTS,
+    ));
 }
 
 fn spawn_enemies(mut commands: Commands) {
@@ -399,11 +439,12 @@ fn spawn_enemies(mut commands: Commands) {
             velocity: Vec2::default(),
             current_state: EnemyStates::default(),
         },
+        stats: Stats { health: Health::default(), armor: Armor(0), strength: Strength(10) },
         monster_type: Goblin,
         sprite: SpriteBundle {
             sprite: Sprite {
                 color: Color::hex("fc0315").unwrap(),
-                custom_size: Some(Vec2::new(14., 40.)),
+                custom_size: Some(Vec2::new(40., 140.)),
                 ..default()
             },
             transform: Transform::from_xyz(150f32, 100f32, 10.),
@@ -416,10 +457,11 @@ fn spawn_enemies(mut commands: Commands) {
             //     Group::from_bits(0b1001).unwrap(),
             //     Group::from_bits(0b1101).unwrap(),
             // )),
+            // filter_flags: QueryFilterFlags::EXCLUDE_KINEMATIC | QueryFilterFlags::EXCLUDE_SENSORS,
             ..default()
         },
         controller_output: KinematicCharacterControllerOutput::default(),
-        collider: Collider::cuboid(7., 20.),
+        collider: Collider::cuboid(20., 70.),
     });
 
     commands.spawn(EnemyBundle {
@@ -429,11 +471,12 @@ fn spawn_enemies(mut commands: Commands) {
             velocity: Vec2::default(),
             current_state: EnemyStates::default(),
         },
+        stats: Stats { health: Health::default(), armor: Armor(0), strength: Strength(5) },
         monster_type: Slime,
         sprite: SpriteBundle {
             sprite: Sprite {
                 color: Color::hex("fc0303").unwrap(),
-                custom_size: Some(Vec2::splat(30f32)),
+                custom_size: Some(Vec2::splat(60f32)),
                 ..default()
             },
             transform: Transform::from_xyz(200f32, 100f32, 10.),
@@ -442,6 +485,7 @@ fn spawn_enemies(mut commands: Commands) {
         rigid_body: RigidBody::KinematicVelocityBased,
         controller: KinematicCharacterController {
             slide: true,
+            filter_flags: QueryFilterFlags::EXCLUDE_KINEMATIC | QueryFilterFlags::EXCLUDE_SENSORS,
             // filter_groups: Some(CollisionGroups::new(
             //     Group::from_bits(0b1001).unwrap(),
             //     Group::from_bits(0b1101).unwrap(),
@@ -449,55 +493,60 @@ fn spawn_enemies(mut commands: Commands) {
             ..default()
         },
         controller_output: KinematicCharacterControllerOutput::default(),
-        collider: Collider::cuboid(15., 15.),
+        collider: Collider::ball(30.),
     });
 }
 
 fn setup_player(mut commands: Commands) {
-    commands.spawn(PlayerBundle {
-        name: Player(Name("Player".to_string())),
-        player: ActiveEntity {
-            rotation: 1,
-            velocity: Vec2::default(),
-            current_state: PlayerStates::default(),
-        },
-        sprite: SpriteBundle {
-            sprite: Sprite {
-                color: Color::hex("00fc43").unwrap(),
-                custom_size: Some(Vec2::new(60., 140.)),
+    commands
+        .spawn(PlayerBundle {
+            name: Player(Name("Player".to_string())),
+            player: ActiveEntity {
+                rotation: 1,
+                velocity: Vec2::default(),
+                current_state: PlayerStates::default(),
+            },
+            stats: Stats { health: Health::default(), armor: Armor(10), strength: Strength(10) },
+            sprite: SpriteBundle {
+                sprite: Sprite {
+                    color: Color::hex("00fc43").unwrap(),
+                    custom_size: Some(Vec2::new(60., 140.)),
+                    ..Default::default()
+                },
+                transform: Transform::from_xyz(-100., 400., 10.),
                 ..Default::default()
             },
-            transform: Transform::from_xyz(-100., 400., 10.),
-            ..Default::default()
-        },
-        input: InputManagerBundle::<PlayerActions> {
-            action_state: ActionState::default(),
-            input_map: InputMap::default()
-                .insert(KeyCode::Escape, PlayerActions::Save) // delete this
-                .insert(DualAxis::left_stick(), PlayerActions::Move)
-                .insert(VirtualDPad::wasd(), PlayerActions::Move)
-                .insert(VirtualDPad::arrow_keys(), PlayerActions::Move)
-                .insert(KeyCode::Space, PlayerActions::Jump)
-                .insert(GamepadButtonType::South, PlayerActions::Jump)
-                .insert(KeyCode::LShift, PlayerActions::Dash)
-                .insert(GamepadButtonType::East, PlayerActions::Dash)
-                .set_gamepad(Gamepad { id: 0 })
-                .build(),
-        },
-        rigid_body: RigidBody::KinematicVelocityBased,
-        controller: KinematicCharacterController {
-            slide: true,
-            autostep: None,
-            filter_flags: QueryFilterFlags::EXCLUDE_KINEMATIC,
-            // filter_groups: Some(CollisionGroups::new(
-            //     Group::from_bits(0b1101).unwrap(),
-            //     Group::from_bits(0b1001).unwrap(),
-            // )),
-            ..default()
-        },
-        controller_output: KinematicCharacterControllerOutput::default(),
-        collider: Collider::capsule(Vec2::new(0., 40.), Vec2::new(0.0, -40.0), 30.),
-    });
+            input: InputManagerBundle::<PlayerActions> {
+                action_state: ActionState::default(),
+                input_map: InputMap::default()
+                    .insert(KeyCode::Escape, PlayerActions::Save) // delete this
+                    .insert(DualAxis::left_stick(), PlayerActions::Move)
+                    .insert(VirtualDPad::wasd(), PlayerActions::Move)
+                    .insert(VirtualDPad::arrow_keys(), PlayerActions::Move)
+                    .insert(KeyCode::Space, PlayerActions::Jump)
+                    .insert(GamepadButtonType::South, PlayerActions::Jump)
+                    .insert(KeyCode::LShift, PlayerActions::Dash)
+                    .insert(GamepadButtonType::East, PlayerActions::Dash)
+                    .set_gamepad(Gamepad { id: 0 })
+                    .build(),
+            },
+            // rigid_body: RigidBody::Dynamic,
+            // rigid_body: RigidBody::KinematicPositionBased,
+            rigid_body: RigidBody::KinematicVelocityBased,
+            controller: KinematicCharacterController {
+                slide: true,
+                autostep: None,
+                filter_flags: QueryFilterFlags::EXCLUDE_KINEMATIC
+                    | QueryFilterFlags::EXCLUDE_SENSORS,
+                // filter_groups: Some(CollisionGroups::new(
+                //     Group::from_bits(0b1101).unwrap(),
+                //     Group::from_bits(0b1001).unwrap(),
+                // )),
+                ..default()
+            },
+            controller_output: KinematicCharacterControllerOutput::default(),
+            collider: Collider::capsule(Vec2::new(0., 40.), Vec2::new(0.0, -40.0), 30.),
+        }).insert(ActiveCollisionTypes::default() | ActiveCollisionTypes::KINEMATIC_STATIC);
 }
 
 const SCENE_FILE_PATH: &str = "data/scenes/test_scene.scn.ron";
@@ -618,7 +667,7 @@ fn move_player(
                 if pos_slide == axis_vector {
                     instant_velocity.y = 1.; // reset inertia
                     jump_info.count = 1; // TODO: implement method for count jumps
-                    info!("|||||||||||||||||||||||SLIDING|||||||||||||||||||||||");
+                                         // info!("|||||||||||||||||||||||SLIDING|||||||||||||||||||||||");
                     let slide_scale = -21.;
                     instant_acceleration += Vec2::Y * slide_scale;
                     sliding.clear();
@@ -747,7 +796,7 @@ fn move_enemy_goblin(
         }
 
         // TODO: logic move for enemies
-        instant_velocity += Vec2::new(rotation*speed, 0.);
+        instant_velocity += Vec2::new(rotation * speed, 0.);
         instant_velocity = instant_velocity.clamp(Vec2::splat(-1000.0), Vec2::splat(1000.0));
         enemy.velocity = (instant_acceleration * dt) + instant_velocity;
         let translation = controller.translation.unwrap_or(Vec2::new(0., 0.)) + enemy.velocity * dt;
@@ -781,7 +830,7 @@ fn move_enemy_slime(
         let speed = 47.0;
         let mut instant_acceleration = Vec2::ZERO;
         let mut instant_velocity = enemy.velocity;
-        let jump_impulse = 400f32;
+        let jump_impulse = 1000f32;
         // physics simulation
         if grounded {
             // friction
@@ -821,12 +870,12 @@ fn player_collision(
 ) {
     // info!("Start collision detect");
     for (out, transform) in q.iter() {
-        const HEIGHT_PLAYER:  f32 = 68.; // size height / 2 -2
+        const HEIGHT_PLAYER: f32 = 68.; // size height / 2 -2
         const WIDTH_PLAYER: f32 = 28.; // sizwe width / 2 - 2
         let x_left_player = transform.translation.x - WIDTH_PLAYER;
         let x_right_player = transform.translation.x + WIDTH_PLAYER;
 
-        let y_top_player = transform.translation.y + HEIGHT_PLAYER; 
+        let y_top_player = transform.translation.y + HEIGHT_PLAYER;
         let y_down_player = transform.translation.y - HEIGHT_PLAYER;
 
         // info!("Player transform {:?}", transform);
@@ -834,7 +883,10 @@ fn player_collision(
             if y_top_player < collision.toi.witness1.y {
                 // up collision player
                 // so that the hero starts falling when he hits the ceiling
-                if collision.toi.witness1.x > x_left_player && collision.toi.witness1.x < x_right_player { // angel player not top
+                if collision.toi.witness1.x > x_left_player
+                    && collision.toi.witness1.x < x_right_player
+                {
+                    // angel player not top
                     stop_jump.send_default();
                 }
             }
@@ -871,4 +923,22 @@ fn player_collision(
         }
     }
     // info!("End collision detect");
+}
+
+// TODO: dont work collision events with Rigid body velocity based
+fn sensor_event(
+    mut commands: Commands, q: Query<Entity, With<Sensor>> ,
+    mut collision_events: EventReader<CollisionEvent>,
+) {
+    for collision_event in collision_events.iter() {
+        match collision_event {
+            CollisionEvent::Started(entity_event, self_entity, type_entity) => (),
+            CollisionEvent::Stopped(entity_event, self_entity, type_entity)  => ()
+        }
+        println!("Received collision event: {:?}", collision_event);
+    }
+    // for entity in q.iter() {
+    //     commands.entity(entity).log_components();
+    //     info!("{:?}", entity);
+    // }
 }

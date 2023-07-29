@@ -42,7 +42,7 @@ This step is practical. It needs to define user input and output, while doing ev
 
 You need to select map tiles, collisions, backgrounds and other decorations, you can also interact with some elements of the map such as doors and so on. At this stage, map generation is not needed yet, everything can be hardcoded.
 
-## 5 Saving/Loading 
+## 5 Saving/Loading - SKIPPED
 
 (First: Note that you can initially do away with save and load entirely - a feature not present in many early implementations - and generate your dungeons instead of hard-coding them, which is arguably a more roguelike approach!)
 I skipped this step due to the complexity of implementing collider serialization from the bevy_rapier2d library. There is a method how it could be implemented, but this is too bad code.
@@ -50,3 +50,9 @@ I skipped this step due to the complexity of implementing collider serialization
 ## 6 Enemy
 
 Implement monsters, add simple AI. For example, chase the player if he is in sight or walk back and forth while waiting.
+
+## 7 Interaction
+
+At this stage, you need to add the characteristics for your creatures. I will add a characteristic as needed, and not because it “looks cool”. </br>
+Also at this stage it is worth improving the "AI" of creatures, noticing each other - push, attack, etc. </br>
+Implement and test the combat system - no hardware yet, just hardcode the values. </br>
