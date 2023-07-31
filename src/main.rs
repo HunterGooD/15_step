@@ -149,6 +149,10 @@ struct ActiveEntity<T: Default> {
     pub current_state: T,
 }
 
+// **********************************************************  STATS 
+// add speed how stats
+// stats for weapon > attack damage, attack speed, attack range, attack interrupt, attack knockback
+// Strength * attack damage = true damage 
 #[derive(Clone, Debug, Component, Reflect)]
 #[reflect(Component)]
 struct Health(i32);
@@ -166,6 +170,12 @@ struct Armor(i32);
 #[derive(Clone, Default, Debug, Component, Reflect)]
 #[reflect(Component)]
 struct Strength(i32);
+
+// *********************************************************  END STATS
+
+#[derive(Clone, Default, Debug, Component, Reflect)]
+#[reflect(Component)]
+struct AttackCollider(Option<Entity>);
 
 #[derive(Clone, Default, Debug, Component, Reflect)]
 #[reflect(Component)]
@@ -245,6 +255,7 @@ struct PlayerBundle {
     controller: KinematicCharacterController,
     controller_output: KinematicCharacterControllerOutput,
     collider: Collider,
+    attack: AttackCollider,
 }
 
 //TODO: create abstract entity bundle
@@ -260,6 +271,7 @@ struct EnemyBundle<T: Default + Component> {
     controller: KinematicCharacterController,
     controller_output: KinematicCharacterControllerOutput,
     collider: Collider,
+    attack: AttackCollider,
 }
 
 #[derive(Clone, Default, Debug, Component, Reflect)]
@@ -421,80 +433,85 @@ fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
         TransformBundle::from_transform(Transform::from_xyz(-100., -300., 0.)),
         Collider::cuboid(10., 20.),
         Sensor,
-        ActiveEvents::COLLISION_EVENTS
-        // .insert(ActiveEvents::COLLISION_EVENTS)
+        ActiveEvents::COLLISION_EVENTS, // .insert(ActiveEvents::COLLISION_EVENTS)
     ));
 
-    commands.spawn((
-        Collider::ball(50.),
-        ActiveEvents::COLLISION_EVENTS,
-    ));
+    commands.spawn((Collider::ball(50.), ActiveEvents::COLLISION_EVENTS));
 }
 
 fn spawn_enemies(mut commands: Commands) {
-    commands.spawn(EnemyBundle {
-        name: Enemy(Name("Goblin".to_string())),
-        enemy: ActiveEntity {
-            rotation: 1,
-            velocity: Vec2::default(),
-            current_state: EnemyStates::default(),
-        },
-        stats: Stats { health: Health::default(), armor: Armor(0), strength: Strength(10) },
-        monster_type: Goblin,
-        sprite: SpriteBundle {
-            sprite: Sprite {
-                color: Color::hex("fc0315").unwrap(),
-                custom_size: Some(Vec2::new(40., 140.)),
+    commands
+        .spawn(EnemyBundle {
+            name: Enemy(Name("Goblin".to_string())),
+            enemy: ActiveEntity {
+                rotation: 1,
+                velocity: Vec2::default(),
+                current_state: EnemyStates::default(),
+            },
+            stats: Stats {
+                health: Health::default(),
+                armor: Armor(0),
+                strength: Strength(10),
+            },
+            monster_type: Goblin,
+            sprite: SpriteBundle {
+                sprite: Sprite {
+                    color: Color::hex("fc0315").unwrap(),
+                    custom_size: Some(Vec2::new(40., 140.)),
+                    ..default()
+                },
+                transform: Transform::from_xyz(150f32, 100f32, 10.),
                 ..default()
             },
-            transform: Transform::from_xyz(150f32, 100f32, 10.),
-            ..default()
-        },
-        rigid_body: RigidBody::KinematicVelocityBased,
-        controller: KinematicCharacterController {
-            slide: true,
-            // filter_groups: Some(CollisionGroups::new(
-            //     Group::from_bits(0b1001).unwrap(),
-            //     Group::from_bits(0b1101).unwrap(),
-            // )),
-            // filter_flags: QueryFilterFlags::EXCLUDE_KINEMATIC | QueryFilterFlags::EXCLUDE_SENSORS,
-            ..default()
-        },
-        controller_output: KinematicCharacterControllerOutput::default(),
-        collider: Collider::cuboid(20., 70.),
-    });
+            rigid_body: RigidBody::KinematicVelocityBased,
+            controller: KinematicCharacterController {
+                slide: true,
+                filter_flags: QueryFilterFlags::EXCLUDE_KINEMATIC
+                    | QueryFilterFlags::EXCLUDE_SENSORS,
+                ..default()
+            },
+            controller_output: KinematicCharacterControllerOutput::default(),
+            collider: Collider::cuboid(20., 70.),
+            attack: AttackCollider(None),
+        })
+        .insert(ActiveCollisionTypes::default() | ActiveCollisionTypes::KINEMATIC_STATIC);
 
-    commands.spawn(EnemyBundle {
-        name: Enemy(Name("Slime".to_string())),
-        enemy: ActiveEntity {
-            rotation: 1,
-            velocity: Vec2::default(),
-            current_state: EnemyStates::default(),
-        },
-        stats: Stats { health: Health::default(), armor: Armor(0), strength: Strength(5) },
-        monster_type: Slime,
-        sprite: SpriteBundle {
-            sprite: Sprite {
-                color: Color::hex("fc0303").unwrap(),
-                custom_size: Some(Vec2::splat(60f32)),
+    commands
+        .spawn(EnemyBundle {
+            name: Enemy(Name("Slime".to_string())),
+            enemy: ActiveEntity {
+                rotation: 1,
+                velocity: Vec2::default(),
+                current_state: EnemyStates::default(),
+            },
+            stats: Stats {
+                health: Health::default(),
+                armor: Armor(0),
+                strength: Strength(5),
+            },
+            monster_type: Slime,
+            sprite: SpriteBundle {
+                sprite: Sprite {
+                    color: Color::hex("fc0303").unwrap(),
+                    custom_size: Some(Vec2::splat(60f32)),
+                    ..default()
+                },
+                transform: Transform::from_xyz(200f32, 100f32, 10.),
                 ..default()
             },
-            transform: Transform::from_xyz(200f32, 100f32, 10.),
-            ..default()
-        },
-        rigid_body: RigidBody::KinematicVelocityBased,
-        controller: KinematicCharacterController {
-            slide: true,
-            filter_flags: QueryFilterFlags::EXCLUDE_KINEMATIC | QueryFilterFlags::EXCLUDE_SENSORS,
-            // filter_groups: Some(CollisionGroups::new(
-            //     Group::from_bits(0b1001).unwrap(),
-            //     Group::from_bits(0b1101).unwrap(),
-            // )),
-            ..default()
-        },
-        controller_output: KinematicCharacterControllerOutput::default(),
-        collider: Collider::ball(30.),
-    });
+            rigid_body: RigidBody::KinematicVelocityBased,
+            controller: KinematicCharacterController {
+                slide: true,
+                filter_flags: QueryFilterFlags::EXCLUDE_KINEMATIC
+                    | QueryFilterFlags::EXCLUDE_SENSORS,
+                ..default()
+            },
+            controller_output: KinematicCharacterControllerOutput::default(),
+            collider: Collider::ball(30.),
+
+            attack: AttackCollider(None),
+        })
+        .insert(ActiveCollisionTypes::default() | ActiveCollisionTypes::KINEMATIC_STATIC);
 }
 
 fn setup_player(mut commands: Commands) {
@@ -506,7 +523,11 @@ fn setup_player(mut commands: Commands) {
                 velocity: Vec2::default(),
                 current_state: PlayerStates::default(),
             },
-            stats: Stats { health: Health::default(), armor: Armor(10), strength: Strength(10) },
+            stats: Stats {
+                health: Health::default(),
+                armor: Armor(10),
+                strength: Strength(10),
+            },
             sprite: SpriteBundle {
                 sprite: Sprite {
                     color: Color::hex("00fc43").unwrap(),
@@ -538,15 +559,14 @@ fn setup_player(mut commands: Commands) {
                 autostep: None,
                 filter_flags: QueryFilterFlags::EXCLUDE_KINEMATIC
                     | QueryFilterFlags::EXCLUDE_SENSORS,
-                // filter_groups: Some(CollisionGroups::new(
-                //     Group::from_bits(0b1101).unwrap(),
-                //     Group::from_bits(0b1001).unwrap(),
-                // )),
                 ..default()
             },
             controller_output: KinematicCharacterControllerOutput::default(),
             collider: Collider::capsule(Vec2::new(0., 40.), Vec2::new(0.0, -40.0), 30.),
-        }).insert(ActiveCollisionTypes::default() | ActiveCollisionTypes::KINEMATIC_STATIC);
+
+            attack: AttackCollider(None),
+        })
+        .insert(ActiveCollisionTypes::default() | ActiveCollisionTypes::KINEMATIC_STATIC);
 }
 
 const SCENE_FILE_PATH: &str = "data/scenes/test_scene.scn.ron";
@@ -927,18 +947,25 @@ fn player_collision(
 
 // TODO: dont work collision events with Rigid body velocity based
 fn sensor_event(
-    mut commands: Commands, q: Query<Entity, With<Sensor>> ,
+    mut commands: Commands,
+    q: Query<(Entity, &Health, &Enemy), With<Enemy>>,
     mut collision_events: EventReader<CollisionEvent>,
 ) {
-    for collision_event in collision_events.iter() {
-        match collision_event {
-            CollisionEvent::Started(entity_event, self_entity, type_entity) => (),
-            CollisionEvent::Stopped(entity_event, self_entity, type_entity)  => ()
+    for (enemy_entity, health_enemy, name_enemy) in q.iter() {
+        // info!("{:?}", name_enemy);
+        for collision_event in collision_events.iter() {
+            info!("[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[\n");
+            match collision_event {
+                CollisionEvent::Started(entity_event, sensor_entity, type_entity) => {
+                    info!("{:?}", entity_event);
+                    info!("{:?}", entity_event.eq(&enemy_entity));
+                    info!("{:?}", type_entity);
+                    info!("{:?}", name_enemy);
+                }
+                CollisionEvent::Stopped(entity_event, sensor_entity, type_entity) => (),
+            }
+            // println!("Received collision event: {:?}", collision_event);
+            info!("]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]\n");
         }
-        println!("Received collision event: {:?}", collision_event);
     }
-    // for entity in q.iter() {
-    //     commands.entity(entity).log_components();
-    //     info!("{:?}", entity);
-    // }
 }
