@@ -46,6 +46,7 @@ fn main() {
         .register_type::<core::option::Option<bevy::math::Rect>>()
         .register_type::<core::option::Option<bevy::ecs::entity::Entity>>()
         .register_type::<core::option::Option<bevy::math::f32::Vec2>>()
+        .register_type::<AttackCollider>()
         // end register type
         // register events
         .add_event::<StopJump>()
@@ -75,8 +76,10 @@ fn main() {
         .add_system(move_enemy_slime)
         .add_system(move_enemy_goblin)
         .add_system(follow)
+        .add_system(player_attack)
+        .add_system(attack_checker.run_if(isset_collider))
         .add_system(player_collision)
-        .add_system(sensor_event.in_base_set(CoreSet::PostUpdate))
+        .add_system(sensor_event)
         // .add_system(save_scene) // TODO: reflect bevy_rapier_2d collider to serialize scene
         .run();
 }
@@ -104,6 +107,7 @@ enum PlayerActions {
     Jump,
     Dash,
     Save,
+    Attack,
 }
 
 // for debug
@@ -149,10 +153,10 @@ struct ActiveEntity<T: Default> {
     pub current_state: T,
 }
 
-// **********************************************************  STATS 
+// **********************************************************  STATS
 // add speed how stats
 // stats for weapon > attack damage, attack speed, attack range, attack interrupt, attack knockback
-// Strength * attack damage = true damage 
+// Strength * attack damage = true damage
 #[derive(Clone, Debug, Component, Reflect)]
 #[reflect(Component)]
 struct Health(i32);
@@ -182,6 +186,16 @@ struct AttackCollider(Option<Entity>);
 struct Ground(Name); // for ground collider name
 
 const MAX_JUMP: u8 = 2;
+
+#[derive(Resource, Debug, Reflect)]
+#[reflect(Resource)]
+struct TimeAttack(Timer);
+
+impl Default for TimeAttack {
+    fn default() -> Self {
+        Self(Timer::new(Duration::from_millis(380), TimerMode::Once))
+    }
+}
 
 #[derive(Resource, Debug, Reflect)]
 #[reflect(Resource)]
@@ -429,14 +443,6 @@ fn setup_map(mut commands: Commands, asset_server: Res<AssetServer>) {
         .insert(TransformBundle::from_transform(Transform::from_xyz(
             -200., 200., 0.,
         )));
-    commands.spawn((
-        TransformBundle::from_transform(Transform::from_xyz(-100., -300., 0.)),
-        Collider::cuboid(10., 20.),
-        Sensor,
-        ActiveEvents::COLLISION_EVENTS, // .insert(ActiveEvents::COLLISION_EVENTS)
-    ));
-
-    commands.spawn((Collider::ball(50.), ActiveEvents::COLLISION_EVENTS));
 }
 
 fn spawn_enemies(mut commands: Commands) {
@@ -474,7 +480,7 @@ fn spawn_enemies(mut commands: Commands) {
             collider: Collider::cuboid(20., 70.),
             attack: AttackCollider(None),
         })
-        .insert(ActiveCollisionTypes::default() | ActiveCollisionTypes::KINEMATIC_STATIC);
+        .insert(ActiveCollisionTypes::default() | ActiveCollisionTypes::KINEMATIC_KINEMATIC);
 
     commands
         .spawn(EnemyBundle {
@@ -511,7 +517,7 @@ fn spawn_enemies(mut commands: Commands) {
 
             attack: AttackCollider(None),
         })
-        .insert(ActiveCollisionTypes::default() | ActiveCollisionTypes::KINEMATIC_STATIC);
+        .insert(ActiveCollisionTypes::default() | ActiveCollisionTypes::KINEMATIC_KINEMATIC);
 }
 
 fn setup_player(mut commands: Commands) {
@@ -548,6 +554,7 @@ fn setup_player(mut commands: Commands) {
                     .insert(GamepadButtonType::South, PlayerActions::Jump)
                     .insert(KeyCode::LShift, PlayerActions::Dash)
                     .insert(GamepadButtonType::East, PlayerActions::Dash)
+                    .insert(MouseButton::Left, PlayerActions::Attack)
                     .set_gamepad(Gamepad { id: 0 })
                     .build(),
             },
@@ -566,7 +573,7 @@ fn setup_player(mut commands: Commands) {
 
             attack: AttackCollider(None),
         })
-        .insert(ActiveCollisionTypes::default() | ActiveCollisionTypes::KINEMATIC_STATIC);
+        .insert(ActiveCollisionTypes::default() | ActiveCollisionTypes::KINEMATIC_KINEMATIC);
 }
 
 const SCENE_FILE_PATH: &str = "data/scenes/test_scene.scn.ron";
@@ -770,6 +777,70 @@ fn move_player(
     controller.translation = Some(translation);
 }
 
+fn player_attack(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut controller_query: Query<
+        (
+            Entity,
+            &ActionState<PlayerActions>,
+            &mut AttackCollider,
+            &Transform,
+            &mut ActiveEntity<PlayerStates>,
+            &mut KinematicCharacterController,
+            Option<&KinematicCharacterControllerOutput>,
+        ),
+        With<Player>,
+    >,
+    mut time_attack: Local<TimeAttack>, //TODO: attach to weapon
+) {
+    let (p_entity, action_state, mut attack_collider, t, _, _, _) = controller_query.single_mut();
+    let is_attack = action_state.just_pressed(PlayerActions::Attack);
+    if let Some(collider_entity) = attack_collider.0 {
+        time_attack.0.tick(time.delta());
+        if time_attack.0.finished() {
+            commands
+                .entity(p_entity)
+                .remove_children(&[collider_entity]);
+            commands.entity(collider_entity).despawn();
+            attack_collider.0 = None;
+        }
+        return;
+    }
+    if !is_attack {
+        return;
+    }
+    time_attack.0.reset();
+    let entity = commands
+        .spawn((
+            TransformBundle::from_transform(Transform::from_xyz(50., 0., 0.)),
+            // TransformBundle::from_transform(t.clone()),
+            Collider::cuboid(10., 20.),
+            Sensor,
+            ActiveEvents::COLLISION_EVENTS, // .insert(ActiveEvents::COLLISION_EVENTS)
+        ))
+        .id();
+    attack_collider.0 = Some(entity);
+    commands.entity(p_entity).add_child(entity);
+}
+
+fn attack_checker(// mut q: Query<&mut Transform, (With<AttackCollider>, Without<Player>)>,
+    // p_q: Query<&Transform, With<Player>>,
+) {
+    // let mut attack_transform = q.single_mut();
+    // let player_transform = p_q.single();
+
+    // attack_transform.translation = player_transform.translation;
+}
+
+fn isset_collider(query: Query<&AttackCollider, With<Player>>) -> bool {
+    let attack = query.single();
+    match attack.0 {
+        Some(_) => true,
+        None => false,
+    }
+}
+
 fn move_enemy_goblin(
     time: Res<Time>,
     rapier_config: Res<RapierConfiguration>,
@@ -954,18 +1025,18 @@ fn sensor_event(
     for (enemy_entity, health_enemy, name_enemy) in q.iter() {
         // info!("{:?}", name_enemy);
         for collision_event in collision_events.iter() {
-            info!("[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[\n");
             match collision_event {
                 CollisionEvent::Started(entity_event, sensor_entity, type_entity) => {
+                    info!("[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[\n");
                     info!("{:?}", entity_event);
                     info!("{:?}", entity_event.eq(&enemy_entity));
                     info!("{:?}", type_entity);
                     info!("{:?}", name_enemy);
+                    info!("]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]\n");
                 }
                 CollisionEvent::Stopped(entity_event, sensor_entity, type_entity) => (),
             }
             // println!("Received collision event: {:?}", collision_event);
-            info!("]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]\n");
         }
     }
 }
