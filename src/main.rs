@@ -56,34 +56,46 @@ fn main() {
         .add_event::<StopJump>()
         .add_event::<SlideEvent>()
         // end register events
-        .add_plugin(LogDiagnosticsPlugin::default())
-        .add_plugin(bevy::diagnostic::SystemInformationDiagnosticsPlugin::default())
-        .add_plugin(bevy::diagnostic::EntityCountDiagnosticsPlugin::default())
-        .add_plugin(FrameTimeDiagnosticsPlugin)
-        .add_plugin(WorldInspectorPlugin::default())
-        .add_plugin(TilemapPlugin)
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0)) // create world rapier physics
+        .add_plugins((
+            LogDiagnosticsPlugin::default(),
+            bevy::diagnostic::SystemInformationDiagnosticsPlugin::default(),
+            bevy::diagnostic::EntityCountDiagnosticsPlugin::default(),
+            FrameTimeDiagnosticsPlugin,
+            WorldInspectorPlugin::default(),
+            TilemapPlugin,
+            RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0), // create world rapier physics
+            RapierDebugRenderPlugin::default(),
+            InputManagerPlugin::<PlayerActions>::default(), // player actions for buttons
+            InputManagerPlugin::<CameraActions>::default(),
+        ))
         .insert_resource(RapierConfiguration {
             gravity: Vec2::new(0.0, -2000.0),
             ..default()
         })
-        .add_plugin(RapierDebugRenderPlugin::default())
-        .add_plugin(InputManagerPlugin::<PlayerActions>::default()) // player actions for buttons
-        .add_plugin(InputManagerPlugin::<CameraActions>::default())
-        .add_startup_system(setup_graphics)
-        .add_startup_system(setup_player.run_if(save_file_not_exist))
-        .add_startup_system(spawn_enemies)
-        .add_startup_system(setup_map.run_if(save_file_not_exist))
-        .add_startup_system(load_scene.run_if(not(save_file_not_exist)))
-        .add_system(camera_settings)
-        .add_system(move_player)
-        .add_system(move_enemy_slime)
-        .add_system(move_enemy_goblin)
-        .add_system(follow)
-        .add_system(player_attack)
-        .add_system(attack_checker.run_if(isset_collider))
-        .add_system(player_collision)
-        .add_system(sensor_event)
+        .add_systems(
+            Startup,
+            (
+                setup_graphics,
+                setup_player.run_if(save_file_not_exist),
+                spawn_enemies,
+                setup_map.run_if(save_file_not_exist),
+                load_scene.run_if(not(save_file_not_exist)),
+            ),
+        )
+        .add_systems(
+            Update,
+            (
+                camera_settings,
+                move_player,
+                move_enemy_slime,
+                move_enemy_goblin,
+                follow,
+                player_attack,
+                attack_checker.run_if(isset_collider),
+                player_collision,
+                sensor_event,
+            ),
+        )
         // .add_system(save_scene) // TODO: reflect bevy_rapier_2d collider to serialize scene
         .run();
 }
@@ -115,7 +127,7 @@ enum PlayerActions {
 }
 
 // for debug
-#[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug)]
+#[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
 enum CameraActions {
     Zoom,
 }
@@ -217,10 +229,10 @@ impl Default for JumpInfo {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Event, Default, Debug)]
 struct StopJump;
 
-#[derive(Default, Debug)]
+#[derive(Event, Default, Debug)]
 struct SlideEvent(WallPosition);
 
 #[derive(Default, Debug, Clone)]
@@ -556,7 +568,7 @@ fn setup_player(mut commands: Commands) {
                     .insert(VirtualDPad::arrow_keys(), PlayerActions::Move)
                     .insert(KeyCode::Space, PlayerActions::Jump)
                     .insert(GamepadButtonType::South, PlayerActions::Jump)
-                    .insert(KeyCode::LShift, PlayerActions::Dash)
+                    .insert(KeyCode::ShiftLeft, PlayerActions::Dash)
                     .insert(GamepadButtonType::East, PlayerActions::Dash)
                     .insert(MouseButton::Left, PlayerActions::Attack)
                     .set_gamepad(Gamepad { id: 0 })
@@ -780,7 +792,6 @@ fn move_player(
     let translation = controller.translation.unwrap_or(Vec2::new(0., 0.)) + player.velocity * dt;
     controller.translation = Some(translation);
 }
-
 
 fn player_attack(
     mut commands: Commands,
