@@ -47,6 +47,10 @@ fn main() {
         .register_type::<core::option::Option<bevy::ecs::entity::Entity>>()
         .register_type::<core::option::Option<bevy::math::f32::Vec2>>()
         .register_type::<AttackCollider>()
+        .register_type::<Health>()
+        .register_type::<Enemy>()
+        .register_type::<Goblin>()
+        .register_type::<Slime>()
         // end register type
         // register events
         .add_event::<StopJump>()
@@ -777,6 +781,7 @@ fn move_player(
     controller.translation = Some(translation);
 }
 
+
 fn player_attack(
     mut commands: Commands,
     time: Res<Time>,
@@ -1016,20 +1021,32 @@ fn player_collision(
     // info!("End collision detect");
 }
 
+#[derive(Resource, Debug, Reflect)]
+#[reflect(Resource)]
+struct BeforeCollider(Option<Entity>);
+
+impl Default for BeforeCollider {
+    fn default() -> Self {
+        Self(None)
+    }
+}
+
 // TODO: dont work collision events with Rigid body velocity based
 fn sensor_event(
     mut commands: Commands,
-    q: Query<(Entity, &Health, &Enemy), With<Enemy>>,
+    mut q: Query<(Entity, &mut Health, &Enemy), With<Enemy>>,
     mut collision_events: EventReader<CollisionEvent>,
 ) {
-    for (enemy_entity, health_enemy, name_enemy) in q.iter() {
+    for (enemy_entity, mut health_enemy, name_enemy) in q.iter_mut() {
         // info!("{:?}", name_enemy);
         for collision_event in collision_events.iter() {
             match collision_event {
                 CollisionEvent::Started(entity_event, sensor_entity, type_entity) => {
                     info!("[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[\n");
                     info!("{:?}", entity_event);
-                    info!("{:?}", entity_event.eq(&enemy_entity));
+                    if entity_event.eq(&enemy_entity) {
+                        health_enemy.0 -= 10;
+                    }
                     info!("{:?}", type_entity);
                     info!("{:?}", name_enemy);
                     info!("]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]\n");
