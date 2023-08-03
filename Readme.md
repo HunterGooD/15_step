@@ -1,6 +1,8 @@
 # 15 step 
 This repo for game in 15 steps. 15 beginner steps in gamedev </br>
-The steps do not claim to be correct when developing games. They exist for enthusiasts who just wanted to create their own game.
+The steps do not claim to be correct when developing games. They exist for enthusiasts who just wanted to create their own game. </br>
+
+Project structure borrowed from the [bevy_template](https://github.com/NiklasEi/bevy_game_template) repository.
 
 ## 1 Decide to write a game
 The idea of a word game. The idea of a game in a couple of words.
