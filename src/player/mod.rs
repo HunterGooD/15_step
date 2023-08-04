@@ -23,7 +23,7 @@ impl Plugin for PlayerPlugin {
         })
         .add_event::<StopJump>()
         .add_event::<SlideEvent>()
-        .add_systems(OnEnter(GameState::InGame), (spawn_player, setup_graphics))
+        .add_systems(OnEnter(GameState::InGame), (spawn_player, spawn_camera))
         .add_systems(
             Update,
             (
@@ -130,7 +130,7 @@ enum PlayerActions {
 enum CameraActions {
     Zoom,
 }
-fn setup_graphics(mut commands: Commands) {
+fn spawn_camera(mut commands: Commands) {
     // Add a camera so we can see the debug-render.
     commands
         .spawn(Camera2dBundle::default())

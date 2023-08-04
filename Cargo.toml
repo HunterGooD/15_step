@@ -40,3 +40,6 @@ image = { version = "0.24", default-features = false }
 
 [build-dependencies]
 embed-resource = "1.4"
+
+[patch.crates-io]
+bevy_ecs_tilemap = {git = "http://github.com/StarArawn/bevy_ecs_tilemap", version = "0.11", branch = "main" }

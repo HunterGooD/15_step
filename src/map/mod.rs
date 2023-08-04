@@ -1,20 +1,27 @@
-use crate::GameState;
 use crate::loading::TextureAssets;
+use crate::GameState;
 
 use bevy::prelude::*;
-use bevy_rapier2d::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
+use bevy_rapier2d::prelude::*;
 
 pub struct MapPlugin;
 
 impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(TilemapPlugin).add_systems(OnEnter(GameState::InGame), setup_map);
+        app
+        .add_plugins(TilemapPlugin)
+            .add_systems(OnEnter(GameState::InGame), setup_map);
     }
 }
 
-fn setup_map(mut commands: Commands,asset: Res<TextureAssets> ) {
-    let texture_handle = asset.tile.clone_weak();// dont load tiles in bevy_ecs_tilemap
+fn setup_map(mut commands: Commands, asset: Res<TextureAssets>) {
+    let texture_handle = asset.tile.clone(); // dont load tiles in bevy_ecs_tilemap
+    // let texture_handle: Handle<Image> = asset_server.load("tiles/forest/tileset.png");
+    // commands.spawn(SpriteBundle{
+    //     texture: asset.tile.clone(),
+    //     ..default()
+    // });
     let map_size = TilemapSize { x: 21, y: 15 };
 
     let mut tile_storage = TileStorage::empty(map_size);

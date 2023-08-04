@@ -1,25 +1,17 @@
-use crate::entities::*;
 use crate::enemy::*;
-use crate::GameState;
+use crate::entities::*;
 use crate::player::Player;
+use crate::GameState;
 
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
-
 
 pub struct GoblinsPlugin;
 
 impl Plugin for GoblinsPlugin {
     fn build(&self, app: &mut App) {
-        app
-        .add_systems(OnEnter(GameState::InGame), spawn_goblins)
-        .add_systems(
-            Update,
-            (
-                move_goblins
-            )
-                .run_if(in_state(GameState::InGame)),
-        );
+        app.add_systems(OnEnter(GameState::InGame), spawn_goblins)
+            .add_systems(Update, (move_goblins).run_if(in_state(GameState::InGame)));
     }
 }
 
@@ -28,7 +20,7 @@ impl Plugin for GoblinsPlugin {
 pub struct Goblin;
 
 fn spawn_goblins(mut commands: Commands) {
-     commands
+    commands
         .spawn(EnemyBundle {
             name: Enemy(Name::new("Goblin")),
             enemy: ActiveEntity {
@@ -63,7 +55,6 @@ fn spawn_goblins(mut commands: Commands) {
             attack: AttackCollider(None),
         })
         .insert(ActiveCollisionTypes::default() | ActiveCollisionTypes::KINEMATIC_KINEMATIC);
-
 }
 
 fn move_goblins(

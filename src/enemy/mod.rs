@@ -1,10 +1,10 @@
-mod slime;
 mod goblin;
+mod slime;
 
-use crate::GameState;
-use crate::enemy::slime::SlimesPlugin;
 use crate::enemy::goblin::GoblinsPlugin;
+use crate::enemy::slime::SlimesPlugin;
 use crate::entities::*;
+use crate::GameState;
 
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
@@ -13,13 +13,10 @@ pub struct EnemyPlugin;
 
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((
-            SlimesPlugin,
-            GoblinsPlugin,
-        )).add_systems(Update, sensor_event.run_if(in_state(GameState::InGame)));
+        app.add_plugins((SlimesPlugin, GoblinsPlugin))
+            .add_systems(Update, sensor_event.run_if(in_state(GameState::InGame)));
     }
 }
-
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Default, Reflect)]
 enum EnemyStates {
@@ -32,7 +29,6 @@ enum EnemyStates {
 #[derive(Clone, Default, Debug, Component, Reflect)]
 #[reflect(Component)]
 struct Enemy(Name);
-
 
 #[derive(Bundle, Default)]
 struct EnemyBundle<T: Default + Component> {
@@ -52,7 +48,8 @@ struct EnemyBundle<T: Default + Component> {
 #[reflect(Resource)]
 struct BeforeCollider(Option<Entity>);
 
-impl Default for BeforeCollider { // add for dont hit from one entity more
+impl Default for BeforeCollider {
+    // add for dont hit from one entity more
     fn default() -> Self {
         Self(None)
     }
@@ -64,14 +61,14 @@ fn sensor_event(
     mut q: Query<(Entity, &mut Health, &Enemy), With<Enemy>>,
     mut collision_events: EventReader<CollisionEvent>,
 ) {
-    for (enemy_entity, mut health_enemy, name_enemy) in q.iter_mut() {
-        // info!("{:?}", name_enemy);
-        for collision_event in collision_events.iter() {
-            match collision_event {
-                CollisionEvent::Started(entity_event, sensor_entity, type_entity) => {
+    for collision_event in collision_events.iter() {
+        match collision_event {
+            CollisionEvent::Started(entity_event, sensor_entity, type_entity) => {
+                for (enemy_entity, mut health_enemy, name_enemy) in q.iter_mut() {
                     info!("[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[\n");
                     info!("{:?}", entity_event);
                     info!("{:?}", sensor_entity);
+                    info!("{:?}", entity_event.eq(&enemy_entity));
                     if entity_event.eq(&enemy_entity) {
                         health_enemy.0 -= 10;
                     }
@@ -79,8 +76,8 @@ fn sensor_event(
                     info!("{:?}", name_enemy);
                     info!("]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]\n");
                 }
-                CollisionEvent::Stopped(_, _, _) => (),
             }
+            CollisionEvent::Stopped(_, _, _) => (),
         }
     }
 }

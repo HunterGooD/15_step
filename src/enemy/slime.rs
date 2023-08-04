@@ -1,7 +1,7 @@
-use crate::entities::*;
 use crate::enemy::*;
-use crate::GameState;
+use crate::entities::*;
 use crate::player::Player;
+use crate::GameState;
 
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
@@ -10,15 +10,8 @@ pub struct SlimesPlugin;
 
 impl Plugin for SlimesPlugin {
     fn build(&self, app: &mut App) {
-        app
-        .add_systems(OnEnter(GameState::InGame), spawn_slimes)
-        .add_systems(
-            Update,
-            (
-                move_slime
-            )
-                .run_if(in_state(GameState::InGame)),
-        );
+        app.add_systems(OnEnter(GameState::InGame), spawn_slimes)
+            .add_systems(Update, (move_slime).run_if(in_state(GameState::InGame)));
     }
 }
 
@@ -27,7 +20,7 @@ impl Plugin for SlimesPlugin {
 pub struct Slime;
 
 fn spawn_slimes(mut commands: Commands) {
-     commands
+    commands
         .spawn(EnemyBundle {
             name: Enemy(Name::new("Slime")),
             enemy: ActiveEntity {
