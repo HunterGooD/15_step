@@ -276,6 +276,7 @@ fn move_player(
                 for e in sliding.iter() {
                     pos_slide = e.0.clone();
                 }
+                
                 let pos_slide = match pos_slide {
                     WallPosition::Left => -1.,
                     WallPosition::Right => 1.,
@@ -326,6 +327,7 @@ fn move_player(
     }
     if !stop_jump.is_empty() {
         stop_jump.clear();
+        info!("Jsajdjasdjaj");
         jump_info.time_up.tick(Duration::from_secs(1));
         instant_velocity.y = 1.;
     }
@@ -402,9 +404,9 @@ fn player_attack(
     time_attack.0.reset();
     let entity = commands
         .spawn((
-            TransformBundle::from_transform(Transform::from_xyz(50., 0., 0.)),
+            TransformBundle::from_transform(Transform::from_xyz(5., 0., 0.)),
             // TransformBundle::from_transform(t.clone()),
-            Collider::cuboid(10., 20.),
+            Collider::cuboid(5., 10.),
             Sensor,
             ActiveEvents::COLLISION_EVENTS, // .insert(ActiveEvents::COLLISION_EVENTS)
         ))
@@ -439,7 +441,7 @@ fn player_collision(
 ) {
     // info!("Start collision detect");
     for (out, transform) in q.iter() {
-        const HEIGHT_PLAYER: f32 = 68.; // size height / 2 -2
+        const HEIGHT_PLAYER: f32 = 58.; // size height / 2 -2
         const WIDTH_PLAYER: f32 = 28.; // sizwe width / 2 - 2
         let x_left_player = transform.translation.x - WIDTH_PLAYER;
         let x_right_player = transform.translation.x + WIDTH_PLAYER;
@@ -463,6 +465,19 @@ fn player_collision(
             if y_down_player < collision.toi.witness1.y && y_top_player > collision.toi.witness1.y {
                 // left and right collision
                 // slide wall
+                // cmd.spawn(SpriteBundle{
+                //     sprite: Sprite { color: Color::hex("34c6eb").unwrap(), custom_size: Some(Vec2::new(3f32, 10f32)), ..default() }, transform: Transform::from_translation(collision.toi.witness1.extend(0.)), ..default()
+                // });
+                // cmd.spawn(SpriteBundle{
+                //     sprite: Sprite { color: Color::hex("000094").unwrap(), custom_size: Some(Vec2::new(3f32, 10f32)), ..default() }, transform: Transform::from_translation(collision.toi.witness2.extend(0.)), ..default()
+                // });
+    
+                // cmd.spawn(SpriteBundle{
+                //     sprite: Sprite { color: Color::hex("34c6eb").unwrap(), custom_size: Some(Vec2::new(10f32, 3f32)), ..default() }, transform: Transform::from_translation(collision.toi.witness1.extend(0.)), ..default()
+                // });
+                // cmd.spawn(SpriteBundle{
+                //     sprite: Sprite { color: Color::hex("000094").unwrap(), custom_size: Some(Vec2::new(10f32, 3f32)), ..default() }, transform: Transform::from_translation(collision.toi.witness2.extend(0.)), ..default()
+                // });
                 if collision.toi.witness1.x > transform.translation.x {
                     slide.send(SlideEvent(WallPosition::Right));
                 } else {
@@ -474,19 +489,6 @@ fn player_collision(
                 // ground
             }
 
-            // cmd.spawn(SpriteBundle{
-            //     sprite: Sprite { color: Color::hex("34c6eb").unwrap(), custom_size: Some(Vec2::new(3f32, 10f32)), ..default() }, transform: Transform::from_translation(collision.toi.witness1.extend(0.)), ..default()
-            // });
-            // cmd.spawn(SpriteBundle{
-            //     sprite: Sprite { color: Color::hex("000094").unwrap(), custom_size: Some(Vec2::new(3f32, 10f32)), ..default() }, transform: Transform::from_translation(collision.toi.witness2.extend(0.)), ..default()
-            // });
-
-            // cmd.spawn(SpriteBundle{
-            //     sprite: Sprite { color: Color::hex("34c6eb").unwrap(), custom_size: Some(Vec2::new(10f32, 3f32)), ..default() }, transform: Transform::from_translation(collision.toi.witness1.extend(0.)), ..default()
-            // });
-            // cmd.spawn(SpriteBundle{
-            //     sprite: Sprite { color: Color::hex("000094").unwrap(), custom_size: Some(Vec2::new(10f32, 3f32)), ..default() }, transform: Transform::from_translation(collision.toi.witness2.extend(0.)), ..default()
-            // });
 
             // info!("{:?}", collision);
         }

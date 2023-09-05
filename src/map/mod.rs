@@ -17,11 +17,6 @@ impl Plugin for MapPlugin {
 
 fn setup_map(mut commands: Commands, asset: Res<TextureAssets>) {
     let texture_handle = asset.tile.clone(); // dont load tiles in bevy_ecs_tilemap
-    // let texture_handle: Handle<Image> = asset_server.load("tiles/forest/tileset.png");
-    // commands.spawn(SpriteBundle{
-    //     texture: asset.tile.clone(),
-    //     ..default()
-    // });
     let map_size = TilemapSize { x: 21, y: 15 };
 
     let mut tile_storage = TileStorage::empty(map_size);
@@ -123,9 +118,9 @@ fn setup_map(mut commands: Commands, asset: Res<TextureAssets>) {
         map_type,
         size: map_size,
         storage: tile_storage,
-        texture: TilemapTexture::Single(texture_handle.clone()),
+        texture: TilemapTexture::Single(texture_handle),
         tile_size,
-        transform: Transform::from_xyz(0., tile_y, 10000.).with_scale(Vec3::splat(tile_scale)),
+        transform: Transform::from_xyz(0., tile_y, 10.).with_scale(Vec3::splat(tile_scale)),
         ..Default::default()
     });
 

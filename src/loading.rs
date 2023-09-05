@@ -17,6 +17,7 @@ impl Plugin for LoadingPlugin {
 #[derive(AssetCollection, Resource)]
 pub struct TextureAssets {
     #[asset(path = "tiles/forest/tileset.png")]
+    // #[asset(path = "/mnt/programming/rust/15_step_game_beginer/assets/tiles/forest/tileset.png")]
     pub tile: Handle<Image>,
 }
 
