@@ -1,15 +1,17 @@
+mod combat;
 mod enemy;
 mod entities;
+mod events;
 mod loading;
 mod map;
-mod menu;
 mod player;
+mod ui;
 
 use crate::enemy::EnemyPlugin;
 use crate::loading::LoadingPlugin;
 use crate::map::MapPlugin;
-use crate::menu::MenuPlugin;
 use crate::player::PlayerPlugin;
+use crate::ui::menu::MenuPlugin;
 
 use bevy::app::App;
 
@@ -25,21 +27,29 @@ enum GameState {
     #[default]
     Loading,
     InGame,
-    Pause,
     Menu,
+}
+
+#[derive(States, Default, Clone, Eq, PartialEq, Debug, Hash)]
+enum InGameState {
+    Pause,
+    #[default]
+    Play,
 }
 
 pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
-        app.add_state::<GameState>().add_plugins((
-            LoadingPlugin,
-            MenuPlugin,
-            MapPlugin,
-            PlayerPlugin,
-            EnemyPlugin,
-        ));
+        app.add_state::<GameState>()
+            .add_state::<InGameState>()
+            .add_plugins((
+                LoadingPlugin,
+                MenuPlugin,
+                MapPlugin,
+                PlayerPlugin,
+                EnemyPlugin,
+            ));
 
         #[cfg(debug_assertions)]
         {

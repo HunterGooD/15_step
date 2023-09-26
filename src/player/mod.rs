@@ -1,6 +1,6 @@
 use crate::entities::*;
-use crate::GameState;
 use crate::loading::PlayerTexture;
+use crate::{GameState, InGameState};
 
 use bevy::{prelude::*, utils::Duration};
 use bevy_rapier2d::prelude::*;
@@ -32,9 +32,12 @@ impl Plugin for PlayerPlugin {
                 follow,
                 camera_settings,
                 player_collision,
+                sensor_event,
             )
-                .run_if(in_state(GameState::InGame)),
-        );
+                .run_if(in_state(GameState::InGame))
+                .run_if(in_state(InGameState::Play)), // TODO: this func and action press to pause.rs on main crate
+        )
+        .add_systems(Update, pause.run_if(in_state(GameState::InGame)));
     }
 }
 
@@ -123,6 +126,7 @@ enum PlayerActions {
     Dash,
     Save,
     Attack,
+    Pause,
 }
 
 // for debug
@@ -198,6 +202,7 @@ fn spawn_player(mut commands: Commands, texture: Res<PlayerTexture>) {
                     .insert(KeyCode::ShiftLeft, PlayerActions::Dash)
                     .insert(GamepadButtonType::East, PlayerActions::Dash)
                     .insert(MouseButton::Left, PlayerActions::Attack)
+                    .insert(KeyCode::Escape, PlayerActions::Pause)
                     .set_gamepad(Gamepad { id: 0 })
                     .build(),
             },
@@ -217,6 +222,45 @@ fn spawn_player(mut commands: Commands, texture: Res<PlayerTexture>) {
             attack: AttackCollider(None),
         })
         .insert(ActiveCollisionTypes::default() | ActiveCollisionTypes::KINEMATIC_KINEMATIC);
+}
+
+#[derive(Resource, Debug, Reflect)]
+#[reflect(Resource)]
+struct Pause(bool);
+
+impl Pause {
+    fn is_pause(&self) -> bool {
+        self.0
+    }
+
+    fn change(&mut self) {
+        self.0 = !self.0
+    }
+}
+
+impl Default for Pause {
+    fn default() -> Self {
+        Self(false)
+    }
+}
+
+fn pause(
+    mut state: ResMut<NextState<InGameState>>,
+    q: Query<&ActionState<PlayerActions>>,
+    mut pause: Local<Pause>,
+) {
+    let key = q.single();
+    let is_pause_press = key.just_pressed(PlayerActions::Pause);
+    if !is_pause_press {
+        return;
+    }
+    println!("asdadas");
+    let mut state_set = InGameState::Pause;
+    if pause.is_pause() {
+        state_set = InGameState::Play;
+    }
+    state.set(state_set);
+    pause.change();
 }
 
 fn move_player(
@@ -266,7 +310,7 @@ fn move_player(
         instant_velocity.x *= 0.9;
     } else {
         // friction in jump
-        instant_velocity.x *= 0.95;
+        instant_velocity.x *= 0.9;
         // gravity
         if !grounded {
             instant_acceleration += Vec2::Y * rapier_config.gravity;
@@ -276,7 +320,7 @@ fn move_player(
                 for e in sliding.iter() {
                     pos_slide = e.0.clone();
                 }
-                
+
                 let pos_slide = match pos_slide {
                     WallPosition::Left => -1.,
                     WallPosition::Right => 1.,
@@ -327,7 +371,6 @@ fn move_player(
     }
     if !stop_jump.is_empty() {
         stop_jump.clear();
-        info!("Jsajdjasdjaj");
         jump_info.time_up.tick(Duration::from_secs(1));
         instant_velocity.y = 1.;
     }
@@ -375,9 +418,9 @@ fn player_attack(
         (
             Entity,
             &ActionState<PlayerActions>,
-            &mut AttackCollider,
+            &mut AttackCollider, // maybe create local resource with entity collider
             &Transform,
-            &mut ActiveEntity<PlayerStates>,
+            &ActiveEntity<PlayerStates>,
             &mut KinematicCharacterController,
             Option<&KinematicCharacterControllerOutput>,
         ),
@@ -385,7 +428,8 @@ fn player_attack(
     >,
     mut time_attack: Local<TimeAttack>, //TODO: attach to weapon
 ) {
-    let (p_entity, action_state, mut attack_collider, _, _, _, _) = controller_query.single_mut();
+    let (p_entity, action_state, mut attack_collider, _, player, _, _) =
+        controller_query.single_mut();
     let is_attack = action_state.just_pressed(PlayerActions::Attack);
     if let Some(collider_entity) = attack_collider.0 {
         time_attack.0.tick(time.delta());
@@ -404,7 +448,11 @@ fn player_attack(
     time_attack.0.reset();
     let entity = commands
         .spawn((
-            TransformBundle::from_transform(Transform::from_xyz(5., 0., 0.)),
+            TransformBundle::from_transform(Transform::from_xyz(
+                player.rotation as f32 * 14.,
+                0.,
+                0.,
+            )),
             // TransformBundle::from_transform(t.clone()),
             Collider::cuboid(5., 10.),
             Sensor,
@@ -415,6 +463,22 @@ fn player_attack(
     commands.entity(p_entity).add_child(entity);
 }
 
+fn sensor_event(mut collision_events: EventReader<CollisionEvent>) {
+    for collision_event in collision_events.iter() {
+        match collision_event {
+            CollisionEvent::Started(entity_event, sensor_entity, type_entity) => {
+                // for (enemy_entity, mut health_enemy, name_enemy) in q.iter_mut() {
+                info!("[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[\n");
+                info!("{:?}", entity_event);
+                info!("{:?}", sensor_entity);
+                info!("{:?}", type_entity);
+                info!("]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]\n");
+                // }
+            }
+            CollisionEvent::Stopped(_, _, _) => (),
+        }
+    }
+}
 // TODO: camera.rs for 1 function ?
 fn follow(
     time: Res<Time>,
@@ -471,7 +535,7 @@ fn player_collision(
                 // cmd.spawn(SpriteBundle{
                 //     sprite: Sprite { color: Color::hex("000094").unwrap(), custom_size: Some(Vec2::new(3f32, 10f32)), ..default() }, transform: Transform::from_translation(collision.toi.witness2.extend(0.)), ..default()
                 // });
-    
+
                 // cmd.spawn(SpriteBundle{
                 //     sprite: Sprite { color: Color::hex("34c6eb").unwrap(), custom_size: Some(Vec2::new(10f32, 3f32)), ..default() }, transform: Transform::from_translation(collision.toi.witness1.extend(0.)), ..default()
                 // });
@@ -488,7 +552,6 @@ fn player_collision(
             if y_down_player > collision.toi.witness1.y {
                 // ground
             }
-
 
             // info!("{:?}", collision);
         }

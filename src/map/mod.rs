@@ -9,8 +9,7 @@ pub struct MapPlugin;
 
 impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
-        app
-        .add_plugins(TilemapPlugin)
+        app.add_plugins(TilemapPlugin)
             .add_systems(OnEnter(GameState::InGame), setup_map);
     }
 }

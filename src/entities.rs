@@ -42,3 +42,38 @@ pub struct ActiveEntity<T: Default> {
     pub velocity: Vec2,
     pub current_state: T,
 }
+
+#[derive(Clone, Default, Debug, Component, Reflect)]
+#[reflect(Component)]
+pub struct Damage(pub isize);
+
+#[derive(Clone, Default, Debug, Component, Reflect)]
+#[reflect(Component)]
+pub struct ModifyStat {
+    pub time: Timer,
+    pub speed_scale: isize,
+    pub effect: Color,
+}
+
+pub struct DoTStat {
+    pub time: Timer,
+    pub tick_dot: Timer,
+    pub damage: Damage,
+    pub stuck: isize,
+    // pub effect_type
+}
+
+pub enum StatType {
+    AttackDamage,
+    MoveSpeed,
+    
+}
+
+
+pub enum StatModificationType {
+    Percentage,
+    Numerical,
+    Absolute,
+    None,
+}
+
